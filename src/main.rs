@@ -19,7 +19,7 @@ fn setup(mut commands: Commands) {
         .insert(TransformBundle::from(Transform::from_xyz(0.0, -100.0, 0.0)));
 
     // Create the module center.
-    commands
+    let module_center = commands
         .spawn(RigidBody::Dynamic)
         .insert(
             Collider::convex_polyline(vec![
@@ -33,7 +33,8 @@ fn setup(mut commands: Commands) {
             .unwrap(),
         )
         .insert(Restitution::coefficient(0.7))
-        .insert(TransformBundle::from(Transform::from_xyz(0.0, 400.0, 0.0)));
+        .insert(TransformBundle::from(Transform::from_xyz(0.0, 400.0, 0.0)))
+        .id();
 
     // Create left leg.
     commands
@@ -42,7 +43,13 @@ fn setup(mut commands: Commands) {
         .insert(Restitution::coefficient(0.7))
         .insert(TransformBundle::from(Transform::from_xyz(
             -150.0, 300.0, 0.0,
-        )));
+        )))
+        .insert(ImpulseJoint::new(
+            module_center,
+            RevoluteJointBuilder::new()
+                .local_anchor2(Vec2::new(0.0, 50.0)) // Leg anchor
+                .local_anchor1(Vec2::new(-150.0, -50.0)), // Module anchor
+        ));
 
     // Create right leg.
     commands
@@ -51,5 +58,11 @@ fn setup(mut commands: Commands) {
         .insert(Restitution::coefficient(0.7))
         .insert(TransformBundle::from(Transform::from_xyz(
             150.0, 300.0, 0.0,
-        )));
+        )))
+        .insert(ImpulseJoint::new(
+            module_center,
+            RevoluteJointBuilder::new()
+                .local_anchor2(Vec2::new(0.0, 50.0)) // Leg anchor
+                .local_anchor1(Vec2::new(150.0, -50.0)), // Module anchor
+        ));
 }

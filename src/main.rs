@@ -18,6 +18,8 @@ fn setup(mut commands: Commands) {
         .spawn(Collider::cuboid(500.0, 50.0))
         .insert(TransformBundle::from(Transform::from_xyz(0.0, -100.0, 0.0)));
 
+    let module_position = Vec2::new(0.0, 250.0);
+
     // Create the module center.
     let module_center = commands
         .spawn(RigidBody::Dynamic)
@@ -32,37 +34,73 @@ fn setup(mut commands: Commands) {
             ])
             .unwrap(),
         )
-        .insert(Restitution::coefficient(0.7))
-        .insert(TransformBundle::from(Transform::from_xyz(0.0, 400.0, 0.0)))
+        .insert(Restitution::coefficient(0.0))
+        .insert(ColliderMassProperties::Density(5.0))
+        .insert(TransformBundle::from(Transform::from_xyz(
+            module_position.x,
+            module_position.y,
+            0.0,
+        )))
         .id();
+
+    let arm_collider = Collider::convex_polyline(vec![
+        Vec2::new(-12.5, -100.0), // Lower left
+        Vec2::new(12.5, -100.0),  // Lower right
+        Vec2::new(12.5, 0.0),     // Upper right
+        Vec2::new(-12.5, 0.0),    // Upper left
+    ])
+    .unwrap();
+    let arm_angle = 15f32.to_radians();
+
+    let leg_translation = Vec2::new(-150.0, -50.0);
 
     // Create left leg.
     commands
         .spawn(RigidBody::Dynamic)
-        .insert(Collider::cuboid(12.5, 50.0))
-        .insert(Restitution::coefficient(0.7))
+        .insert(Collider::compound(vec![(
+            Vec2::ZERO,
+            -arm_angle,
+            arm_collider.clone(),
+        )]))
+        .insert(Restitution::coefficient(0.0))
+        .insert(ColliderMassProperties::Density(1.0))
         .insert(TransformBundle::from(Transform::from_xyz(
-            -150.0, 300.0, 0.0,
+            module_position.x + leg_translation.x,
+            module_position.y + leg_translation.y,
+            0.0,
         )))
         .insert(ImpulseJoint::new(
             module_center,
             RevoluteJointBuilder::new()
-                .local_anchor2(Vec2::new(0.0, 50.0)) // Leg anchor
-                .local_anchor1(Vec2::new(-150.0, -50.0)), // Module anchor
+                .local_anchor2(Vec2::new(0.0, 0.0)) // Leg anchor
+                .local_anchor1(leg_translation) // Module anchor
+                .limits([-arm_angle, arm_angle]) // Rotation limits
+                .motor(0.0, -0.3, 0.0, 40.0),
         ));
+
+    let leg_translation = Vec2::new(150.0, -50.0);
 
     // Create right leg.
     commands
         .spawn(RigidBody::Dynamic)
-        .insert(Collider::cuboid(12.5, 50.0))
-        .insert(Restitution::coefficient(0.7))
+        .insert(Collider::compound(vec![(
+            Vec2::ZERO,
+            arm_angle,
+            arm_collider.clone(),
+        )]))
+        .insert(Restitution::coefficient(0.0))
+        .insert(ColliderMassProperties::Density(1.0))
         .insert(TransformBundle::from(Transform::from_xyz(
-            150.0, 300.0, 0.0,
+            module_position.x + leg_translation.x,
+            module_position.y + leg_translation.y,
+            0.0,
         )))
         .insert(ImpulseJoint::new(
             module_center,
             RevoluteJointBuilder::new()
-                .local_anchor2(Vec2::new(0.0, 50.0)) // Leg anchor
-                .local_anchor1(Vec2::new(150.0, -50.0)), // Module anchor
+                .local_anchor2(Vec2::new(0.0, 0.0)) // Leg anchor
+                .local_anchor1(leg_translation) // Module anchor
+                .limits([-arm_angle, arm_angle]) // Rotation limits
+                .motor(0.0, 0.3, 0.0, 40.0),
         ));
 }

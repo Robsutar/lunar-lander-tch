@@ -1,0 +1,20 @@
+[package]
+name = "lunar-lander-tch"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = { version = "0.14.2", default-features = false, features = [
+    "bevy_render",
+    "bevy_text",
+    "bevy_winit",
+    "default_font",
+    "multi_threaded",
+    "bevy_sprite",
+    "webgl2",
+    "x11",
+] }
+bevy_egui = "0.30.0"
+egui_plot = "0.29.0"
+rand = "0.8.5"
+tch = { version = "0.18.0", features = ["download-libtorch"] }

@@ -53,3 +53,40 @@ impl PlayStepAction {
         }
     }
 }
+
+pub struct State([f32; Self::SIZE]);
+impl State {
+    pub const SIZE: usize = 8;
+
+    pub fn position_x(&self) -> f32 {
+        self.0[0]
+    }
+    pub fn position_y(&self) -> f32 {
+        self.0[1]
+    }
+    pub fn velocity_x(&self) -> f32 {
+        self.0[2]
+    }
+    pub fn velocity_y(&self) -> f32 {
+        self.0[3]
+    }
+    pub fn orientation_angle(&self) -> f32 {
+        self.0[4]
+    }
+    pub fn angular_velocity(&self) -> f32 {
+        self.0[5]
+    }
+    pub fn left_arm_contact(&self) -> f32 {
+        self.0[6]
+    }
+    pub fn right_arm_contact(&self) -> f32 {
+        self.0[7]
+    }
+
+    pub fn is_left_arm_contact(&self) -> bool {
+        self.left_arm_contact() == 1.0
+    }
+    pub fn is_right_arm_contact(&self) -> bool {
+        self.right_arm_contact() == 1.0
+    }
+}

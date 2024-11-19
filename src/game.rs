@@ -1,4 +1,5 @@
-use bevy::prelude::*;
+use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
+use bevy_rapier2d::prelude::*;
 
 pub const SCALE: f32 = 30.0; // Affects how fast-paced the game is, forces should be adjusted as well
 
@@ -112,6 +113,9 @@ impl Default for Wind {
     }
 }
 
+#[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct GameStepSchedule;
+
 pub struct GamePlugin {
     gravity: f32,
     enable_wind: Option<Wind>,
@@ -126,6 +130,18 @@ impl Default for GamePlugin {
 }
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        todo!()
+        app.insert_resource(RapierConfiguration {
+            gravity: Vec2::new(0.0, self.gravity),
+            timestep_mode: TimestepMode::Fixed {
+                dt: 1.0 / 60.0,
+                substeps: 1,
+            },
+            ..RapierConfiguration::new(1.0)
+        });
+        app.add_plugins(
+            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0)
+                .in_schedule(GameStepSchedule),
+        );
+        app.add_plugins(RapierDebugRenderPlugin::default());
     }
 }

@@ -115,7 +115,13 @@ impl Default for Wind {
 }
 
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct PreGameStepSchedule;
+
+#[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct GameStepSchedule;
+
+#[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct PostGameStepSchedule;
 
 #[derive(Resource)]
 pub struct GameUpdater {
@@ -150,6 +156,9 @@ impl Plugin for GamePlugin {
         );
         app.add_plugins(RapierDebugRenderPlugin::default());
 
+        app.init_schedule(PreGameStepSchedule);
+        app.init_schedule(GameStepSchedule);
+        app.init_schedule(PostGameStepSchedule);
         app.insert_resource(GameUpdater {
             timer: Timer::from_seconds(1.0 / FPS, TimerMode::Repeating),
         });
@@ -162,7 +171,9 @@ fn game_updater(mut commands: Commands, time: Res<Time>, mut updater: ResMut<Gam
 
     while updater.timer.finished() {
         commands.add(|world: &mut World| {
+            world.run_schedule(PreGameStepSchedule);
             world.run_schedule(GameStepSchedule);
+            world.run_schedule(PostGameStepSchedule);
         });
         updater.timer.reset();
     }

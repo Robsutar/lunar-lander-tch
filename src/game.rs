@@ -98,6 +98,19 @@ impl PlayStepAction {
 /// Done: true if the episode ended.
 pub type PlayStepResult = (State, f32, bool);
 
+/// Wind effects applied to lander.
+pub struct Wind {
+    power: f32,
+    turbulence_power: f32,
+}
+impl Default for Wind {
+    fn default() -> Self {
+        Self {
+            power: 15.0,
+            turbulence_power: 1.5,
+        }
+    }
+}
 
 
 

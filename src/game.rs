@@ -1,4 +1,11 @@
-use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
+use bevy::{
+    ecs::schedule::ScheduleLabel,
+    prelude::*,
+    render::{
+        mesh::{Indices, PrimitiveTopology},
+        render_asset::RenderAssetUsages,
+    },
+};
 use bevy_rapier2d::prelude::*;
 
 pub const FPS: f32 = 50.0;
@@ -10,7 +17,7 @@ pub const SIDE_ENGINE_POWER: f32 = 0.6;
 pub const INITIAL_RANDOM: f32 = 1000.0; // Set 1500 to make game harder
 
 pub const LANDER_POLY: [Vec2; 6] = [
-    Vec2::new(-14.0, 17.0),  // Left Up
+    Vec2::new(-14.0, 17.0),  // Left Upper
     Vec2::new(-17.0, 0.0),   // Left Central
     Vec2::new(-17.0, -10.0), // Left Lower
     Vec2::new(17.0, -10.0),  // Right Lower
@@ -114,6 +121,17 @@ impl Default for Wind {
     }
 }
 
+pub type PbrMeshMaterial = (Handle<Mesh>, Handle<StandardMaterial>);
+
+#[derive(Resource)]
+pub struct GameAssets {
+    center_pbr: PbrMeshMaterial,
+    arm_pbr: PbrMeshMaterial,
+    flag_pbr: PbrMeshMaterial,
+    flag_handle_pbr: PbrMeshMaterial,
+    ground_material: Handle<StandardMaterial>,
+}
+
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct PreGameStepSchedule;
 
@@ -164,6 +182,73 @@ impl Plugin for GamePlugin {
         });
         app.add_systems(Update, game_updater);
     }
+}
+
+fn init_assets(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let center_pbr = {
+        let positions: Vec<[f32; 3]> = LANDER_POLY
+            .iter()
+            .map(|p| [p.x / SCALE, p.y / SCALE, 0.0])
+            .collect();
+        let indices = vec![
+            0, 1, 2, // First triangle
+            0, 2, 3, // Second triangle
+            0, 3, 4, // Third triangle
+            0, 4, 5, // Fourth triangle
+        ];
+
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.insert_indices(Indices::U32(indices));
+
+        (
+            meshes.add(mesh),
+            materials.add(Color::srgb_u8(128, 102, 230)),
+        )
+    };
+
+    let arm_pbr = {
+        let mut mesh: Mesh = Cuboid::new(LEG_W, LEG_H, 0.0).into();
+        mesh.transform_by(Transform::from_xyz(0.0, -LEG_H / 2.0, 0.0));
+
+        (meshes.add(mesh), materials.add(Color::srgb_u8(77, 77, 128)))
+    };
+
+    let flag_pbr = {
+        let mut mesh: Mesh = Triangle2d::new(
+            Vec2::new(0.0, 0.0),
+            Vec2::new(0.0, -10.0),
+            Vec2::new(25.0, -5.0),
+        )
+        .into();
+        mesh.transform_by(Transform::from_xyz(0.0, 50.0, 0.0));
+
+        (meshes.add(mesh), materials.add(Color::srgb_u8(77, 77, 128)))
+    };
+
+    let flag_handle_pbr = {
+        let mut mesh: Mesh = Cuboid::new(1.0, 50.0, 0.0).into();
+        mesh.transform_by(Transform::from_xyz(0.0, 25.0, 0.0));
+
+        (meshes.add(mesh), materials.add(Color::srgb_u8(77, 77, 128)))
+    };
+
+    let moon_material = materials.add(Color::WHITE);
+
+    commands.insert_resource(GameAssets {
+        center_pbr,
+        arm_pbr,
+        flag_pbr,
+        flag_handle_pbr,
+        ground_material: moon_material,
+    });
 }
 
 fn game_updater(mut commands: Commands, time: Res<Time>, mut updater: ResMut<GameUpdater>) {

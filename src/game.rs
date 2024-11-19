@@ -112,13 +112,20 @@ impl Default for Wind {
     }
 }
 
-
-
-
-
-
-
-
-
+pub struct GamePlugin {
+    gravity: f32,
+    enable_wind: Option<Wind>,
+}
+impl Default for GamePlugin {
+    fn default() -> Self {
+        Self {
+            gravity: -10.0,
+            enable_wind: None,
+        }
+    }
+}
+impl Plugin for GamePlugin {
+    fn build(&self, app: &mut App) {
+        todo!()
     }
 }

@@ -1,6 +1,7 @@
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 use bevy_rapier2d::prelude::*;
 
+pub const FPS: f32 = 50.0;
 pub const SCALE: f32 = 30.0; // Affects how fast-paced the game is, forces should be adjusted as well
 
 pub const MAIN_ENGINE_POWER: f32 = 13.0;
@@ -116,6 +117,11 @@ impl Default for Wind {
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct GameStepSchedule;
 
+#[derive(Resource)]
+pub struct GameUpdater {
+    timer: Timer,
+}
+
 pub struct GamePlugin {
     gravity: f32,
     enable_wind: Option<Wind>,
@@ -143,5 +149,21 @@ impl Plugin for GamePlugin {
                 .in_schedule(GameStepSchedule),
         );
         app.add_plugins(RapierDebugRenderPlugin::default());
+
+        app.insert_resource(GameUpdater {
+            timer: Timer::from_seconds(1.0 / FPS, TimerMode::Repeating),
+        });
+        app.add_systems(Update, game_updater);
+    }
+}
+
+fn game_updater(mut commands: Commands, time: Res<Time>, mut updater: ResMut<GameUpdater>) {
+    updater.timer.tick(time.delta());
+
+    while updater.timer.finished() {
+        commands.add(|world: &mut World| {
+            world.run_schedule(GameStepSchedule);
+        });
+        updater.timer.reset();
     }
 }

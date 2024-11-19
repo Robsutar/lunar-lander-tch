@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+mod game;
 use bevy_rapier2d::prelude::*;
 
 fn main() {

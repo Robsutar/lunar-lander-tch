@@ -26,3 +26,30 @@ pub const SIDE_ENGINE_AWAY: f32 = 12.0; // Horizontal distance off center
 
 pub const VIEWPORT_W: f32 = 600.0; // Width of the window
 pub const VIEWPORT_H: f32 = 400.0; // Height of the window
+
+pub enum PlayStepAction {
+    Nothing,
+    ThrusterLeft,
+    ThrusterRight,
+    ThrusterMain,
+}
+impl PlayStepAction {
+    pub fn from_index(action_index: u8) -> Self {
+        match action_index {
+            0 => Self::Nothing,
+            1 => Self::ThrusterLeft,
+            2 => Self::ThrusterRight,
+            3 => Self::ThrusterMain,
+            _ => panic!("Index out of bounds: {action_index}"),
+        }
+    }
+
+    pub fn to_index(&self) -> u8 {
+        match self {
+            Self::Nothing => 0,
+            Self::ThrusterLeft => 1,
+            Self::ThrusterRight => 2,
+            Self::ThrusterMain => 3,
+        }
+    }
+}

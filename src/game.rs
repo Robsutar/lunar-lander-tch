@@ -8,6 +8,7 @@ use bevy::{
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
 use bevy_rapier2d::prelude::*;
+use rand::Rng;
 
 pub const FPS: f32 = 50.0;
 pub const SCALE: f32 = 30.0; // Affects how fast-paced the game is, forces should be adjusted as well
@@ -265,16 +266,57 @@ fn init_assets(
 }
 
 fn init_game(mut commands: Commands, assets: Res<GameAssets>) {
+    let mut rng = rand::thread_rng();
+
     // Create camera
     commands.spawn(Camera2dBundle {
         transform: Transform::from_scale(Vec3::new(1.0 / SCALE, 1.0 / SCALE, 1.0 / SCALE)),
         ..Default::default()
     });
 
-    // Create the ground.
+    let w = VIEWPORT_W / SCALE;
+    let h = VIEWPORT_H / SCALE;
+
+    // Create the terrain.
+    let chunks = 11;
+    let chunk_x: Vec<f32> = (0..chunks)
+        .map(|i| w / (chunks as f32 - 1.0) * i as f32)
+        .collect();
+
+    let mut height: Vec<f32> = (0..chunks).map(|_| rng.gen_range(0.0..h / 2.0)).collect();
+
+    let helipad_x1 = height[chunks / 2 - 1];
+    let helipad_x2 = height[chunks / 2 + 1];
+    let helipad_y = h / 4.0;
+
+    // Helipad flag place.
+    height[chunks / 2 - 2] = helipad_y;
+    height[chunks / 2 - 1] = helipad_y;
+    height[chunks / 2 + 0] = helipad_y;
+    height[chunks / 2 + 1] = helipad_y;
+    height[chunks / 2 + 2] = helipad_y;
+
+    height.insert(0, helipad_y);
+    height.insert(height.len() - 1, helipad_y);
+
+    let smooth_y: Vec<f32> = (1..=chunks)
+        .map(|i| (height[i - 1] + height[i] + height[i + 1]) / 3.0)
+        .collect();
+
+    let mut terrain_poly: Vec<Vec2> = Vec::new();
+    terrain_poly.push(Vec2::new(w / 2.0, -0.0));
+    for (x, y) in chunk_x.into_iter().rev().zip(smooth_y.into_iter().rev()) {
+        terrain_poly.push(Vec2::new(x - w / 2.0, y - 0.0));
+    }
+    terrain_poly.push(Vec2::new(-w / 2.0, -0.0));
+
     commands
-        .spawn(Collider::cuboid(500.0, 1.0))
-        .insert(TransformBundle::from(Transform::from_xyz(0.0, -5.0, 0.0)));
+        .spawn(Collider::polyline(terrain_poly, None))
+        .insert(TransformBundle::from(Transform::from_xyz(
+            0.0,
+            -h / 2.0,
+            0.0,
+        )));
 
     let module_position = Vec2::new(0.0, 5.0);
 

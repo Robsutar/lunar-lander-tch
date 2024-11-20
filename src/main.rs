@@ -8,7 +8,10 @@ fn main() {
     app.insert_resource(ClearColor(Color::BLACK));
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
-            resolution: WindowResolution::new(game::VIEWPORT_W, game::VIEWPORT_H),
+            resolution: WindowResolution::new(
+                game::VIEWPORT_W * game::WINDOW_ZOOM,
+                game::VIEWPORT_H * game::WINDOW_ZOOM,
+            ),
             ..Default::default()
         }),
         ..Default::default()

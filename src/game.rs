@@ -11,6 +11,8 @@ use bevy::{
 use bevy_rapier2d::prelude::*;
 use rand::Rng;
 
+pub const WINDOW_ZOOM: f32 = 2.0; // Affects only visually the scale of the window, adding zoom to camera.
+
 pub const FPS: f32 = 50.0;
 pub const SCALE: f32 = 30.0; // Affects how fast-paced the game is, forces should be adjusted as well
 
@@ -271,7 +273,11 @@ fn init_game(mut commands: Commands, assets: Res<GameAssets>, mut meshes: ResMut
 
     // Create camera
     commands.spawn(Camera2dBundle {
-        transform: Transform::from_scale(Vec3::new(1.0 / SCALE, 1.0 / SCALE, 1.0 / SCALE)),
+        transform: Transform::from_scale(Vec3::new(
+            1.0 / SCALE / WINDOW_ZOOM,
+            1.0 / SCALE / WINDOW_ZOOM,
+            1.0 / SCALE / WINDOW_ZOOM,
+        )),
         ..Default::default()
     });
 

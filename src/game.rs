@@ -4,6 +4,7 @@ use bevy::{
     render::{
         mesh::{Indices, PrimitiveTopology},
         render_asset::RenderAssetUsages,
+        render_resource::ShaderType,
     },
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
@@ -232,21 +233,21 @@ fn init_assets(
     let flag_pbr = {
         let mut mesh: Mesh = Triangle2d::new(
             Vec2::new(0.0, 0.0),
-            Vec2::new(0.0, -10.0),
-            Vec2::new(25.0, -5.0),
+            Vec2::new(0.0, -10.0 / SCALE),
+            Vec2::new(25.0 / SCALE, -5.0 / SCALE),
         )
         .into();
-        mesh.transform_by(Transform::from_xyz(0.0, 50.0, 0.0));
+        mesh.transform_by(Transform::from_xyz(0.0, 50.0 / SCALE, 0.0));
 
         (
             Mesh2dHandle(meshes.add(mesh)),
-            materials.add(Color::srgb_u8(77, 77, 128)),
+            materials.add(Color::srgb_u8(204, 204, 0)),
         )
     };
 
     let flag_handle_pbr = {
-        let mut mesh: Mesh = Cuboid::new(1.0, 50.0, 0.0).into();
-        mesh.transform_by(Transform::from_xyz(0.0, 25.0, 0.0));
+        let mut mesh: Mesh = Cuboid::new(1.0 / SCALE, 50.0 / SCALE, 0.0).into();
+        mesh.transform_by(Transform::from_xyz(0.0, 25.0 / SCALE, 0.0));
 
         (
             Mesh2dHandle(meshes.add(mesh)),
@@ -265,7 +266,7 @@ fn init_assets(
     });
 }
 
-fn init_game(mut commands: Commands, assets: Res<GameAssets>) {
+fn init_game(mut commands: Commands, assets: Res<GameAssets>, mut meshes: ResMut<Assets<Mesh>>) {
     let mut rng = rand::thread_rng();
 
     // Create camera
@@ -310,13 +311,52 @@ fn init_game(mut commands: Commands, assets: Res<GameAssets>) {
     }
     terrain_poly.push(Vec2::new(-w / 2.0, -0.0));
 
+    let terrain_mesh = {
+        let mut earcut = earcut::Earcut::new();
+        let mut terrain_indices: Vec<u32> = Vec::new();
+
+        let data: Vec<[f32; 2]> = terrain_poly.iter().map(|&v| [v.x, v.y]).collect();
+
+        earcut.earcut(data.into_iter(), &[], &mut terrain_indices);
+
+        let mut terrain_mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        let terrain_meshed_positions: Vec<[f32; 3]> =
+            terrain_poly.iter().map(|p| [p.x, p.y, 0.0]).collect();
+        terrain_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, terrain_meshed_positions);
+        terrain_mesh.insert_indices(Indices::U32(terrain_indices));
+
+        Mesh2dHandle(meshes.add(terrain_mesh))
+    };
+
     commands
         .spawn(Collider::polyline(terrain_poly, None))
-        .insert(TransformBundle::from(Transform::from_xyz(
-            0.0,
-            -h / 2.0,
-            0.0,
-        )));
+        .insert(MaterialMesh2dBundle {
+            transform: Transform::from_xyz(0.0, -h / 2.0, 0.0),
+            mesh: terrain_mesh,
+            material: assets.ground_material.clone(),
+            ..Default::default()
+        })
+        .with_children(|parent| {
+            for i in [-1.0, 1.0] {
+                let x_distance = w / (chunks as f32 - 1.0);
+
+                parent.spawn(MaterialMesh2dBundle {
+                    transform: Transform::from_xyz(i * x_distance, helipad_y, 0.0),
+                    mesh: assets.flag_handle_pbr.0.clone(),
+                    material: assets.flag_handle_pbr.1.clone(),
+                    ..Default::default()
+                });
+                parent.spawn(MaterialMesh2dBundle {
+                    transform: Transform::from_xyz(i * x_distance, helipad_y, 0.0),
+                    mesh: assets.flag_pbr.0.clone(),
+                    material: assets.flag_pbr.1.clone(),
+                    ..Default::default()
+                });
+            }
+        });
 
     let module_position = Vec2::new(0.0, 5.0);
 

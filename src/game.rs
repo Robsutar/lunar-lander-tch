@@ -165,7 +165,7 @@ impl Plugin for GamePlugin {
             gravity: Vec2::new(0.0, self.gravity),
             timestep_mode: TimestepMode::Fixed {
                 dt: 1.0 / 60.0,
-                substeps: 10,
+                substeps: SCALE as usize,
             },
             ..RapierConfiguration::new(1.0)
         });

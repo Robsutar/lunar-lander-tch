@@ -389,70 +389,40 @@ fn init_game(mut commands: Commands, assets: Res<GameAssets>, mut meshes: ResMut
         Vec2::new(LEG_W / SCALE, 0.0),                   // Right Upper
     ])
     .unwrap();
-    //TODO: let leg_angle = 15f32.to_radians();
-    let leg_angle = 0.0;
+    let leg_angle = 15f32.to_radians();
 
-    let leg_translation = Vec2::new(-LEG_AWAY / SCALE, 0.0);
+    // Create left and right legs.
+    for i in [-1.0, 1.0] {
+        let leg_translation = Vec2::new(i * LEG_AWAY / SCALE, 0.0);
 
-    // Create left leg.
-    commands
-        .spawn(RigidBody::Dynamic)
-        .insert(Collider::compound(vec![(
-            Vec2::ZERO,
-            -leg_angle,
-            leg_collider.clone(),
-        )]))
-        .insert(Restitution::coefficient(0.0))
-        .insert(ColliderMassProperties::Density(1.0))
-        .insert(MaterialMesh2dBundle {
-            transform: Transform::from_xyz(
-                module_position.x + leg_translation.x,
-                module_position.y + leg_translation.y,
+        commands
+            .spawn(RigidBody::Dynamic)
+            .insert(Collider::compound(vec![(
+                Vec2::ZERO,
                 0.0,
-            ),
-            mesh: assets.leg_pbr.0.clone(),
-            material: assets.leg_pbr.1.clone(),
-            ..Default::default()
-        })
-        .insert(ImpulseJoint::new(
-            module_center,
-            RevoluteJointBuilder::new()
-                .local_anchor2(Vec2::new(0.0, 0.0)) // Leg anchor
-                .local_anchor1(leg_translation) // Module anchor
-                .limits([-leg_angle, leg_angle]) // Rotation limits
-                .motor(0.0, -0.3, 0.0, LEG_SPRING_TORQUE),
-        ));
-
-    let leg_translation = Vec2::new(LEG_AWAY / SCALE, 0.0);
-
-    // Create right leg.
-    commands
-        .spawn(RigidBody::Dynamic)
-        .insert(Collider::compound(vec![(
-            Vec2::ZERO,
-            leg_angle,
-            leg_collider.clone(),
-        )]))
-        .insert(Restitution::coefficient(0.0))
-        .insert(ColliderMassProperties::Density(1.0))
-        .insert(MaterialMesh2dBundle {
-            transform: Transform::from_xyz(
-                module_position.x + leg_translation.x,
-                module_position.y + leg_translation.y,
-                0.0,
-            ),
-            mesh: assets.leg_pbr.0.clone(),
-            material: assets.leg_pbr.1.clone(),
-            ..Default::default()
-        })
-        .insert(ImpulseJoint::new(
-            module_center,
-            RevoluteJointBuilder::new()
-                .local_anchor2(Vec2::new(0.0, 0.0)) // Leg anchor
-                .local_anchor1(leg_translation) // Module anchor
-                .limits([-leg_angle, leg_angle]) // Rotation limits
-                .motor(0.0, 0.3, 0.0, LEG_SPRING_TORQUE),
-        ));
+                leg_collider.clone(),
+            )]))
+            .insert(Restitution::coefficient(0.0))
+            .insert(ColliderMassProperties::Density(1.0))
+            .insert(MaterialMesh2dBundle {
+                transform: Transform::from_xyz(
+                    module_position.x + leg_translation.x,
+                    module_position.y + leg_translation.y,
+                    0.0,
+                ),
+                mesh: assets.leg_pbr.0.clone(),
+                material: assets.leg_pbr.1.clone(),
+                ..Default::default()
+            })
+            .insert(ImpulseJoint::new(
+                module_center,
+                RevoluteJointBuilder::new()
+                    .local_anchor2(Vec2::new(0.0, 0.0)) // Leg anchor
+                    .local_anchor1(leg_translation) // Module anchor
+                    .limits([-leg_angle, leg_angle]) // Rotation limits
+                    .motor(0.0, i * 0.3, 0.0, LEG_SPRING_TORQUE),
+            ));
+    }
 }
 
 fn game_updater(mut commands: Commands, time: Res<Time>, mut updater: ResMut<GameUpdater>) {

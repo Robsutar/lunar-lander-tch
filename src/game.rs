@@ -5,6 +5,7 @@ use bevy::{
         mesh::{Indices, PrimitiveTopology},
         render_asset::RenderAssetUsages,
     },
+    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
 use bevy_rapier2d::prelude::*;
 
@@ -58,18 +59,18 @@ impl State {
     pub fn angular_velocity(&self) -> f32 {
         self.0[5]
     }
-    pub fn left_arm_contact(&self) -> f32 {
+    pub fn left_leg_contact(&self) -> f32 {
         self.0[6]
     }
-    pub fn right_arm_contact(&self) -> f32 {
+    pub fn right_leg_contact(&self) -> f32 {
         self.0[7]
     }
 
-    pub fn is_left_arm_contact(&self) -> bool {
-        self.left_arm_contact() == 1.0
+    pub fn is_left_leg_contact(&self) -> bool {
+        self.left_leg_contact() == 1.0
     }
-    pub fn is_right_arm_contact(&self) -> bool {
-        self.right_arm_contact() == 1.0
+    pub fn is_right_leg_contact(&self) -> bool {
+        self.right_leg_contact() == 1.0
     }
 }
 
@@ -121,15 +122,15 @@ impl Default for Wind {
     }
 }
 
-pub type PbrMeshMaterial = (Handle<Mesh>, Handle<StandardMaterial>);
+pub type MeshMaterial2d = (Mesh2dHandle, Handle<ColorMaterial>);
 
 #[derive(Resource)]
 pub struct GameAssets {
-    center_pbr: PbrMeshMaterial,
-    arm_pbr: PbrMeshMaterial,
-    flag_pbr: PbrMeshMaterial,
-    flag_handle_pbr: PbrMeshMaterial,
-    ground_material: Handle<StandardMaterial>,
+    center_pbr: MeshMaterial2d,
+    leg_pbr: MeshMaterial2d,
+    flag_pbr: MeshMaterial2d,
+    flag_handle_pbr: MeshMaterial2d,
+    ground_material: Handle<ColorMaterial>,
 }
 
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
@@ -164,15 +165,18 @@ impl Plugin for GamePlugin {
             gravity: Vec2::new(0.0, self.gravity),
             timestep_mode: TimestepMode::Fixed {
                 dt: 1.0 / 60.0,
-                substeps: 1,
+                substeps: 10,
             },
             ..RapierConfiguration::new(1.0)
         });
         app.add_plugins(
-            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0)
+            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1.0 / SCALE)
                 .in_schedule(GameStepSchedule),
         );
         app.add_plugins(RapierDebugRenderPlugin::default());
+
+        app.add_systems(Startup, init_assets);
+        app.add_systems(PostStartup, init_game);
 
         app.init_schedule(PreGameStepSchedule);
         app.init_schedule(GameStepSchedule);
@@ -187,7 +191,7 @@ impl Plugin for GamePlugin {
 fn init_assets(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     let center_pbr = {
         let positions: Vec<[f32; 3]> = LANDER_POLY
@@ -209,16 +213,19 @@ fn init_assets(
         mesh.insert_indices(Indices::U32(indices));
 
         (
-            meshes.add(mesh),
+            Mesh2dHandle(meshes.add(mesh)),
             materials.add(Color::srgb_u8(128, 102, 230)),
         )
     };
 
-    let arm_pbr = {
-        let mut mesh: Mesh = Cuboid::new(LEG_W, LEG_H, 0.0).into();
-        mesh.transform_by(Transform::from_xyz(0.0, -LEG_H / 2.0, 0.0));
+    let leg_pbr = {
+        let mut mesh: Mesh = Cuboid::new(LEG_W * 2.0 / SCALE, LEG_H * 2.0 / SCALE, 0.0).into();
+        mesh.transform_by(Transform::from_xyz(0.0, -LEG_H / SCALE, 0.0));
 
-        (meshes.add(mesh), materials.add(Color::srgb_u8(77, 77, 128)))
+        (
+            Mesh2dHandle(meshes.add(mesh)),
+            materials.add(Color::srgb_u8(77, 77, 128)),
+        )
     };
 
     let flag_pbr = {
@@ -230,25 +237,134 @@ fn init_assets(
         .into();
         mesh.transform_by(Transform::from_xyz(0.0, 50.0, 0.0));
 
-        (meshes.add(mesh), materials.add(Color::srgb_u8(77, 77, 128)))
+        (
+            Mesh2dHandle(meshes.add(mesh)),
+            materials.add(Color::srgb_u8(77, 77, 128)),
+        )
     };
 
     let flag_handle_pbr = {
         let mut mesh: Mesh = Cuboid::new(1.0, 50.0, 0.0).into();
         mesh.transform_by(Transform::from_xyz(0.0, 25.0, 0.0));
 
-        (meshes.add(mesh), materials.add(Color::srgb_u8(77, 77, 128)))
+        (
+            Mesh2dHandle(meshes.add(mesh)),
+            materials.add(Color::srgb_u8(77, 77, 128)),
+        )
     };
 
     let moon_material = materials.add(Color::WHITE);
 
     commands.insert_resource(GameAssets {
         center_pbr,
-        arm_pbr,
+        leg_pbr,
         flag_pbr,
         flag_handle_pbr,
         ground_material: moon_material,
     });
+}
+
+fn init_game(mut commands: Commands, assets: Res<GameAssets>) {
+    // Create camera
+    commands.spawn(Camera2dBundle {
+        transform: Transform::from_scale(Vec3::new(1.0 / SCALE, 1.0 / SCALE, 1.0 / SCALE)),
+        ..Default::default()
+    });
+
+    // Create the ground.
+    commands
+        .spawn(Collider::cuboid(500.0, 1.0))
+        .insert(TransformBundle::from(Transform::from_xyz(0.0, -5.0, 0.0)));
+
+    let module_position = Vec2::new(0.0, 5.0);
+
+    // Create the module center.
+    let module_center = commands
+        .spawn(RigidBody::Dynamic)
+        .insert(
+            Collider::convex_polyline(LANDER_POLY.iter().map(|a| *a / SCALE).collect()).unwrap(),
+        )
+        .insert(Restitution::coefficient(0.0))
+        .insert(ColliderMassProperties::Density(5.0))
+        .insert(MaterialMesh2dBundle {
+            transform: Transform::from_xyz(module_position.x, module_position.y, 0.0),
+            mesh: assets.center_pbr.0.clone(),
+            material: assets.center_pbr.1.clone(),
+            ..Default::default()
+        })
+        .id();
+
+    let leg_collider = Collider::convex_polyline(vec![
+        Vec2::new(-LEG_W / SCALE, 0.0),                  // Left Upper
+        Vec2::new(-LEG_W / SCALE, -LEG_H * 2.0 / SCALE), // Left Lower
+        Vec2::new(LEG_W / SCALE, -LEG_H * 2.0 / SCALE),  // Right Lower
+        Vec2::new(LEG_W / SCALE, 0.0),                   // Right Upper
+    ])
+    .unwrap();
+    //TODO: let leg_angle = 15f32.to_radians();
+    let leg_angle = 0.0;
+
+    let leg_translation = Vec2::new(-LEG_AWAY / SCALE, 0.0);
+
+    // Create left leg.
+    commands
+        .spawn(RigidBody::Dynamic)
+        .insert(Collider::compound(vec![(
+            Vec2::ZERO,
+            -leg_angle,
+            leg_collider.clone(),
+        )]))
+        .insert(Restitution::coefficient(0.0))
+        .insert(ColliderMassProperties::Density(1.0))
+        .insert(MaterialMesh2dBundle {
+            transform: Transform::from_xyz(
+                module_position.x + leg_translation.x,
+                module_position.y + leg_translation.y,
+                0.0,
+            ),
+            mesh: assets.leg_pbr.0.clone(),
+            material: assets.leg_pbr.1.clone(),
+            ..Default::default()
+        })
+        .insert(ImpulseJoint::new(
+            module_center,
+            RevoluteJointBuilder::new()
+                .local_anchor2(Vec2::new(0.0, 0.0)) // Leg anchor
+                .local_anchor1(leg_translation) // Module anchor
+                .limits([-leg_angle, leg_angle]) // Rotation limits
+                .motor(0.0, -0.3, 0.0, LEG_SPRING_TORQUE),
+        ));
+
+    let leg_translation = Vec2::new(LEG_AWAY / SCALE, 0.0);
+
+    // Create right leg.
+    commands
+        .spawn(RigidBody::Dynamic)
+        .insert(Collider::compound(vec![(
+            Vec2::ZERO,
+            leg_angle,
+            leg_collider.clone(),
+        )]))
+        .insert(Restitution::coefficient(0.0))
+        .insert(ColliderMassProperties::Density(1.0))
+        .insert(MaterialMesh2dBundle {
+            transform: Transform::from_xyz(
+                module_position.x + leg_translation.x,
+                module_position.y + leg_translation.y,
+                0.0,
+            ),
+            mesh: assets.leg_pbr.0.clone(),
+            material: assets.leg_pbr.1.clone(),
+            ..Default::default()
+        })
+        .insert(ImpulseJoint::new(
+            module_center,
+            RevoluteJointBuilder::new()
+                .local_anchor2(Vec2::new(0.0, 0.0)) // Leg anchor
+                .local_anchor1(leg_translation) // Module anchor
+                .limits([-leg_angle, leg_angle]) // Rotation limits
+                .motor(0.0, 0.3, 0.0, LEG_SPRING_TORQUE),
+        ));
 }
 
 fn game_updater(mut commands: Commands, time: Res<Time>, mut updater: ResMut<GameUpdater>) {

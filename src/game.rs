@@ -409,7 +409,8 @@ fn init_game(mut commands: Commands, assets: Res<GameAssets>, mut meshes: ResMut
                     module_position.x + leg_translation.x,
                     module_position.y + leg_translation.y,
                     0.0,
-                ),
+                )
+                .with_rotation(Quat::from_rotation_z(i * leg_angle)),
                 mesh: assets.leg_pbr.0.clone(),
                 material: assets.leg_pbr.1.clone(),
                 ..Default::default()

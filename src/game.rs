@@ -115,26 +115,29 @@ impl StepActionEvent {
         }
     }
 
-    pub fn to_external_force(
+    pub fn to_force(
         &self,
         center_rotation: Quat,
         main_engine_power: f32,
         side_engine_power: f32,
-    ) -> Option<ExternalForce> {
+    ) -> ExternalImpulse {
         match self {
-            StepActionEvent::Nothing => None,
-            StepActionEvent::ThrusterLeft => Some(ExternalForce {
-                force: (center_rotation * Vec3::new(side_engine_power, 0.0, 0.0)).truncate(),
-                torque: 0.0,
-            }),
-            StepActionEvent::ThrusterRight => Some(ExternalForce {
-                force: (center_rotation * Vec3::new(-side_engine_power, 0.0, 0.0)).truncate(),
-                torque: 0.0,
-            }),
-            StepActionEvent::ThrusterMain => Some(ExternalForce {
-                force: (center_rotation * Vec3::new(0.0, main_engine_power, 0.0)).truncate(),
-                torque: 0.0,
-            }),
+            StepActionEvent::Nothing => ExternalImpulse {
+                impulse: Vec2::ZERO,
+                torque_impulse: 0.0,
+            },
+            StepActionEvent::ThrusterLeft => ExternalImpulse {
+                impulse: (center_rotation * Vec3::new(side_engine_power, 0.0, 0.0)).truncate(),
+                torque_impulse: 0.0,
+            },
+            StepActionEvent::ThrusterRight => ExternalImpulse {
+                impulse: (center_rotation * Vec3::new(-side_engine_power, 0.0, 0.0)).truncate(),
+                torque_impulse: 0.0,
+            },
+            StepActionEvent::ThrusterMain => ExternalImpulse {
+                impulse: (center_rotation * Vec3::new(0.0, main_engine_power, 0.0)).truncate(),
+                torque_impulse: 0.0,
+            },
         }
     }
 }
@@ -542,16 +545,15 @@ fn game_pre_update(
     }
 
     // TODO: find better value to this
-    let arbitrary_force_m = 100.0;
+    let arbitrary_force_m = 0.1;
 
     // Apply action in simulation
-    if let Some(force) = action.to_external_force(
+
+    commands.entity(game.center_id).insert(action.to_force(
         center_transform.rotation,
         MAIN_ENGINE_POWER * arbitrary_force_m,
-        SIDE_ENGINE_POWER * arbitrary_force_m,
-    ) {
-        commands.entity(game.center_id).insert(force);
-    }
+        SIDE_ENGINE_POWER,
+    ));
 
     commands.add(|world: &mut World| {
         world.run_schedule(PhysicsStepSchedule);

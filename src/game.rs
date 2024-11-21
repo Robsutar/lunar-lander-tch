@@ -332,32 +332,32 @@ fn game_init(
 
     let terrain_poly = {
         // Create the terrain.
-    let chunk_x: Vec<f32> = (0..chunks)
-        .map(|i| w / (chunks as f32 - 1.0) * i as f32)
-        .collect();
+        let chunk_x: Vec<f32> = (0..chunks)
+            .map(|i| w / (chunks as f32 - 1.0) * i as f32)
+            .collect();
 
-    let mut height: Vec<f32> = (0..chunks).map(|_| rng.gen_range(0.0..h / 2.0)).collect();
+        let mut height: Vec<f32> = (0..chunks).map(|_| rng.gen_range(0.0..h / 2.0)).collect();
 
-    // Helipad flag place.
-    height[chunks / 2 - 2] = helipad_y;
-    height[chunks / 2 - 1] = helipad_y;
-    height[chunks / 2 + 0] = helipad_y;
-    height[chunks / 2 + 1] = helipad_y;
-    height[chunks / 2 + 2] = helipad_y;
+        // Helipad flag place.
+        height[chunks / 2 - 2] = helipad_y;
+        height[chunks / 2 - 1] = helipad_y;
+        height[chunks / 2 + 0] = helipad_y;
+        height[chunks / 2 + 1] = helipad_y;
+        height[chunks / 2 + 2] = helipad_y;
 
-    height.insert(0, helipad_y);
-    height.insert(height.len() - 1, helipad_y);
+        height.insert(0, helipad_y);
+        height.insert(height.len() - 1, helipad_y);
 
-    let smooth_y: Vec<f32> = (1..=chunks)
-        .map(|i| (height[i - 1] + height[i] + height[i + 1]) / 3.0)
-        .collect();
+        let smooth_y: Vec<f32> = (1..=chunks)
+            .map(|i| (height[i - 1] + height[i] + height[i + 1]) / 3.0)
+            .collect();
 
-    let mut terrain_poly: Vec<Vec2> = Vec::new();
-    terrain_poly.push(Vec2::new(w / 2.0, -0.0));
-    for (x, y) in chunk_x.into_iter().rev().zip(smooth_y.into_iter().rev()) {
-        terrain_poly.push(Vec2::new(x - w / 2.0, y - 0.0));
-    }
-    terrain_poly.push(Vec2::new(-w / 2.0, -0.0));
+        let mut terrain_poly: Vec<Vec2> = Vec::new();
+        terrain_poly.push(Vec2::new(w / 2.0, -0.0));
+        for (x, y) in chunk_x.into_iter().rev().zip(smooth_y.into_iter().rev()) {
+            terrain_poly.push(Vec2::new(x - w / 2.0, y - 0.0));
+        }
+        terrain_poly.push(Vec2::new(-w / 2.0, -0.0));
 
         terrain_poly
     };
@@ -540,4 +540,62 @@ fn game_pre_update(
     });
 }
 
+fn game_post_physics_update(
+    mut commands: Commands,
+    rapier_context: Res<RapierContext>,
+    q_game: Query<&Game>,
+    q_center: Query<(&Transform, &Velocity), With<LanderCenter>>,
+    mut ev_step_result: EventWriter<StepResultEvent>,
+) {
+    let game = q_game.single();
+    let (center_transform, center_velocity) = q_center.get(game.center_id).unwrap();
+
+    // Read state after actions applied
+    let mut arm_states = [LegState::InAir; 2];
+
+    for (i, arm) in game.leg_ids.iter().enumerate() {
+        let arm = *arm;
+
+        for contact_pair in rapier_context.contact_pairs_with(arm) {
+            if contact_pair.has_any_active_contact() {
+                let other_collider = if contact_pair.collider1() == arm {
+                    contact_pair.collider2()
+                } else {
+                    contact_pair.collider1()
+                };
+
+                if other_collider == game.ground_id {
+                    arm_states[i] = LegState::InGround;
+                }
+            }
+        }
+    }
+
+    let result = StepResultEvent {
+        next_state: State([
+            center_transform.translation.x,
+            center_transform.translation.y,
+            center_velocity.linvel.x,
+            center_velocity.linvel.y,
+            extract_2d_angle(center_transform.rotation),
+            center_velocity.angvel,
+            if arm_states[0] == LegState::InGround {
+                1.0
+            } else {
+                0.0
+            },
+            if arm_states[1] == LegState::InGround {
+                1.0
+            } else {
+                0.0
+            },
+        ]),
+        reward: 1.0, // TODO:
+        done: false, // TODO:
+    };
+
+    ev_step_result.send(result);
+    commands.add(|world: &mut World| {
+        world.run_schedule(PostGameStepSchedule);
+    });
 }

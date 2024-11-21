@@ -1,5 +1,6 @@
 use bevy::{
-    ecs::schedule::ScheduleLabel,
+    app::MainScheduleOrder,
+    ecs::schedule::{ScheduleBuildSettings, ScheduleLabel},
     prelude::*,
     render::{
         mesh::{Indices, PrimitiveTopology},
@@ -211,6 +212,11 @@ impl Game {
     }
 }
 
+#[derive(Resource)]
+pub struct GameUpdater {
+    timer: Timer,
+}
+
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct PostGameInitSchedule;
 
@@ -218,6 +224,9 @@ pub struct PostGameInitSchedule;
 struct GameResetSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct PostGameResetSchedule;
+
+#[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct AvailableUpdateSchedule;
 
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 struct PreGameStepSchedule;
@@ -243,11 +252,16 @@ impl Plugin for GamePlugin {
         app.init_schedule(GameResetSchedule);
         app.init_schedule(PostGameResetSchedule);
 
+        app.init_schedule(AvailableUpdateSchedule);
+
         app.init_schedule(PreGameStepSchedule);
         app.init_schedule(PhysicsStepSchedule);
         app.init_schedule(PostPhysicsStepSchedule);
         app.init_schedule(PostGameStepSchedule);
 
+        app.insert_resource(GameUpdater {
+            timer: Timer::from_seconds(1.0 / FPS, TimerMode::Repeating),
+        });
         app.insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, self.gravity),
             timestep_mode: TimestepMode::Fixed {
@@ -268,6 +282,8 @@ impl Plugin for GamePlugin {
         app.add_event::<StepResultEvent>();
 
         app.add_systems(PostStartup, game_init);
+
+        app.add_systems(Update, update_available_schedule);
         app.add_systems(PreGameStepSchedule, game_pre_update);
         app.add_systems(PostPhysicsStepSchedule, game_post_physics_update);
     }
@@ -521,6 +537,20 @@ fn game_init(
     commands.add(|world: &mut World| {
         world.run_schedule(PostGameInitSchedule);
     })
+}
+
+fn update_available_schedule(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut updater: ResMut<GameUpdater>,
+) {
+    updater.timer.tick(time.delta());
+    while updater.timer.finished() {
+        commands.add(|world: &mut World| {
+            world.run_schedule(AvailableUpdateSchedule);
+        });
+        updater.timer.reset();
+    }
 }
 
 fn game_pre_update(

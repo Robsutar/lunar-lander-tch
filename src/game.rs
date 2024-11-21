@@ -395,7 +395,7 @@ fn game_init(
         })
         .id();
 
-    let module_position = Vec2::new(0.0, 5.0);
+    let center_position = Vec2::new(0.0, VIEWPORT_H / SCALE / 2.0);
 
     // Create the module center.
     let center_id = commands
@@ -406,7 +406,7 @@ fn game_init(
         .insert(Restitution::coefficient(0.0))
         .insert(ColliderMassProperties::Density(5.0))
         .insert(MaterialMesh2dBundle {
-            transform: Transform::from_xyz(module_position.x, module_position.y, 0.0),
+            transform: Transform::from_xyz(center_position.x, center_position.y, 0.0),
             mesh: center_pbr.0.clone(),
             material: center_pbr.1.clone(),
             ..Default::default()
@@ -440,8 +440,8 @@ fn game_init(
             .insert(ColliderMassProperties::Density(1.0))
             .insert(MaterialMesh2dBundle {
                 transform: Transform::from_xyz(
-                    module_position.x + leg_translation.x,
-                    module_position.y + leg_translation.y,
+                    center_position.x + leg_translation.x,
+                    center_position.y + leg_translation.y,
                     0.0,
                 )
                 .with_rotation(Quat::from_rotation_z(i * leg_angle)),
@@ -474,8 +474,8 @@ fn game_init(
 
     ev_init.send(GameInitEvent {
         initial_state: State([
-            module_position.x / (VIEWPORT_W / SCALE / 2.0),
-            (module_position.y - (helipad_y + LEG_DOWN / SCALE)) / (VIEWPORT_H / SCALE / 2.0),
+            center_position.x / (VIEWPORT_W / SCALE / 2.0),
+            (center_position.y - (helipad_y + LEG_DOWN / SCALE)) / (VIEWPORT_H / SCALE / 2.0),
             0.0,
             0.0,
             0.0,

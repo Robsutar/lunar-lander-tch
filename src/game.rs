@@ -645,6 +645,13 @@ fn game_post_physics_update(
             })
         {
             (-100.0, true)
+        } else if rapier_context
+            .bodies
+            .get(center_body_handle.0)
+            .unwrap()
+            .is_sleeping()
+        {
+            (100.0, true)
     let result = StepResultEvent {
         next_state: State([
             center_transform.translation.x / (VIEWPORT_W / SCALE / 2.0),

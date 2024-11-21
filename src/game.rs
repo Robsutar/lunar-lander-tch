@@ -525,11 +525,14 @@ fn game_pre_update(
         return;
     }
 
+    // TODO: find better value to this
+    let arbitrary_force_m = 100.0;
+
     // Apply action in simulation
     if let Some(force) = action.to_external_force(
         center_transform.rotation,
-        MAIN_ENGINE_POWER,
-        SIDE_ENGINE_POWER,
+        MAIN_ENGINE_POWER * arbitrary_force_m,
+        SIDE_ENGINE_POWER * arbitrary_force_m,
     ) {
         commands.entity(game.center_id).insert(force);
     }

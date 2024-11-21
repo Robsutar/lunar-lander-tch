@@ -504,15 +504,40 @@ fn game_init(
     })
 }
 
-fn game_updater(mut commands: Commands, time: Res<Time>, mut updater: ResMut<GameUpdater>) {
-    updater.timer.tick(time.delta());
+fn game_pre_update(
+    mut commands: Commands,
+    mut ev_step_action: EventReader<StepActionEvent>,
+    q_game: Query<&Game>,
+    q_center: Query<&Transform, With<LanderCenter>>,
+    mut ev_step_result: EventWriter<StepResultEvent>,
+) {
+    let action = ev_step_action.read().next().unwrap();
 
-    while updater.timer.finished() {
+    let game = q_game.single();
+    let center_transform = q_center.get(game.center_id).unwrap();
+
+    // Check if the simulation is already finished
+    if let Some(result) = &game.game_over {
+        ev_step_result.send(result.clone());
         commands.add(|world: &mut World| {
-            world.run_schedule(PreGameStepSchedule);
-            world.run_schedule(GameStepSchedule);
             world.run_schedule(PostGameStepSchedule);
         });
-        updater.timer.reset();
+        return;
     }
+
+    // Apply action in simulation
+    if let Some(force) = action.to_external_force(
+        center_transform.rotation,
+        MAIN_ENGINE_POWER,
+        SIDE_ENGINE_POWER,
+    ) {
+        commands.entity(game.center_id).insert(force);
+    }
+
+    commands.add(|world: &mut World| {
+        world.run_schedule(PhysicsStepSchedule);
+        world.run_schedule(PostPhysicsStepSchedule);
+    });
+}
+
 }

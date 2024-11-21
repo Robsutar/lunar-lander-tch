@@ -360,70 +360,18 @@ fn game_init(
 
     let ground_material = materials.add(Color::WHITE);
 
-    let mut rng = rand::thread_rng();
-
     let w: f32 = VIEWPORT_W / SCALE;
     let h = VIEWPORT_H / SCALE;
     let chunks = 11;
     let helipad_y = h / 4.0;
 
-    let terrain_poly = {
-        // Create the terrain.
-        let chunk_x: Vec<f32> = (0..chunks)
-            .map(|i| w / (chunks as f32 - 1.0) * i as f32)
-            .collect();
-
-        let mut height: Vec<f32> = (0..chunks).map(|_| rng.gen_range(0.0..h / 2.0)).collect();
-
-        // Helipad flag place.
-        height[chunks / 2 - 2] = helipad_y;
-        height[chunks / 2 - 1] = helipad_y;
-        height[chunks / 2 + 0] = helipad_y;
-        height[chunks / 2 + 1] = helipad_y;
-        height[chunks / 2 + 2] = helipad_y;
-
-        height.insert(0, helipad_y);
-        height.insert(height.len() - 1, helipad_y);
-
-        let smooth_y: Vec<f32> = (1..=chunks)
-            .map(|i| (height[i - 1] + height[i] + height[i + 1]) / 3.0)
-            .collect();
-
-        let mut terrain_poly: Vec<Vec2> = Vec::new();
-        terrain_poly.push(Vec2::new(w / 2.0, -0.0));
-        for (x, y) in chunk_x.into_iter().rev().zip(smooth_y.into_iter().rev()) {
-            terrain_poly.push(Vec2::new(x - w / 2.0, y - 0.0));
-        }
-        terrain_poly.push(Vec2::new(-w / 2.0, -0.0));
-
-        terrain_poly
-    };
-
-    let terrain_mesh = {
-        let mut earcut = earcut::Earcut::new();
-        let mut terrain_indices: Vec<u32> = Vec::new();
-
-        let data: Vec<[f32; 2]> = terrain_poly.iter().map(|&v| [v.x, v.y]).collect();
-
-        earcut.earcut(data.into_iter(), &[], &mut terrain_indices);
-
-        let mut terrain_mesh = Mesh::new(
-            PrimitiveTopology::TriangleList,
-            RenderAssetUsages::default(),
-        );
-        let terrain_meshed_positions: Vec<[f32; 3]> =
-            terrain_poly.iter().map(|p| [p.x, p.y, 0.0]).collect();
-        terrain_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, terrain_meshed_positions);
-        terrain_mesh.insert_indices(Indices::U32(terrain_indices));
-
-        Mesh2dHandle(meshes.add(terrain_mesh))
-    };
+    let (terrain_poly, terrain_mesh) = generate_terrain_poly_mesh(chunks, w, h, helipad_y);
 
     let ground_id = commands
         .spawn(Collider::polyline(terrain_poly, None))
         .insert(MaterialMesh2dBundle {
             transform: Transform::from_xyz(0.0, -h / 2.0, 0.0),
-            mesh: terrain_mesh,
+            mesh: Mesh2dHandle(meshes.add(terrain_mesh)),
             material: ground_material.clone(),
             ..Default::default()
         })
@@ -598,11 +546,12 @@ fn game_post_physics_update(
     mut commands: Commands,
     rapier_context: Res<RapierContext>,
     q_game: Query<&Game>,
-    q_center: Query<(&Transform, &Velocity), With<LanderCenter>>,
+    q_center: Query<(&Transform, &Velocity, &RapierRigidBodyHandle), With<LanderCenter>>,
     mut ev_step_result: EventWriter<StepResultEvent>,
 ) {
     let game = q_game.single();
-    let (center_transform, center_velocity) = q_center.get(game.center_id).unwrap();
+    let (center_transform, center_velocity, center_body_handle) =
+        q_center.get(game.center_id).unwrap();
 
     // Read state after actions applied
     let mut arm_states = [LegState::InAir; 2];
@@ -652,6 +601,12 @@ fn game_post_physics_update(
             .is_sleeping()
         {
             (100.0, true)
+        } else {
+            // TODO:
+            (100.0, true)
+        }
+    };
+
     let result = StepResultEvent {
         next_state: State([
             center_transform.translation.x / (VIEWPORT_W / SCALE / 2.0),
@@ -672,12 +627,69 @@ fn game_post_physics_update(
                 0.0
             },
         ]),
-        reward: 1.0, // TODO:
-        done: false, // TODO:
+        reward,
+        done,
     };
 
     ev_step_result.send(result);
     commands.add(|world: &mut World| {
         world.run_schedule(PostGameStepSchedule);
     });
+}
+
+fn generate_terrain_poly_mesh(chunks: usize, w: f32, h: f32, helipad_y: f32) -> (Vec<Vec2>, Mesh) {
+    let mut rng = rand::thread_rng();
+
+    let terrain_poly = {
+        // Create the terrain.
+        let chunk_x: Vec<f32> = (0..chunks)
+            .map(|i| w / (chunks as f32 - 1.0) * i as f32)
+            .collect();
+
+        let mut height: Vec<f32> = (0..chunks).map(|_| rng.gen_range(0.0..h / 2.0)).collect();
+
+        // Helipad flag place.
+        height[chunks / 2 - 2] = helipad_y;
+        height[chunks / 2 - 1] = helipad_y;
+        height[chunks / 2 + 0] = helipad_y;
+        height[chunks / 2 + 1] = helipad_y;
+        height[chunks / 2 + 2] = helipad_y;
+
+        height.insert(0, helipad_y);
+        height.insert(height.len() - 1, helipad_y);
+
+        let smooth_y: Vec<f32> = (1..=chunks)
+            .map(|i| (height[i - 1] + height[i] + height[i + 1]) / 3.0)
+            .collect();
+
+        let mut terrain_poly: Vec<Vec2> = Vec::new();
+        terrain_poly.push(Vec2::new(w / 2.0, -0.0));
+        for (x, y) in chunk_x.into_iter().rev().zip(smooth_y.into_iter().rev()) {
+            terrain_poly.push(Vec2::new(x - w / 2.0, y - 0.0));
+        }
+        terrain_poly.push(Vec2::new(-w / 2.0, -0.0));
+
+        terrain_poly
+    };
+
+    let terrain_mesh = {
+        let mut earcut = earcut::Earcut::new();
+        let mut terrain_indices: Vec<u32> = Vec::new();
+
+        let data: Vec<[f32; 2]> = terrain_poly.iter().map(|&v| [v.x, v.y]).collect();
+
+        earcut.earcut(data.into_iter(), &[], &mut terrain_indices);
+
+        let mut terrain_mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        let terrain_meshed_positions: Vec<[f32; 3]> =
+            terrain_poly.iter().map(|p| [p.x, p.y, 0.0]).collect();
+        terrain_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, terrain_meshed_positions);
+        terrain_mesh.insert_indices(Indices::U32(terrain_indices));
+
+        terrain_mesh
+    };
+    (terrain_poly, terrain_mesh)
 }

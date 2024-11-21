@@ -625,6 +625,26 @@ fn game_post_physics_update(
         }
     }
 
+    let (reward, done) = {
+        if let Some(_) = rapier_context
+            .contact_pairs_with(game.center_id)
+            .find(|contact_pair| {
+                if contact_pair.has_any_active_contact() {
+                    let other_collider = if contact_pair.collider1() == game.center_id {
+                        contact_pair.collider2()
+                    } else {
+                        contact_pair.collider1()
+                    };
+
+                    if other_collider == game.ground_id {
+                        return true;
+                    }
+                }
+
+                false
+            })
+        {
+            (-100.0, true)
     let result = StepResultEvent {
         next_state: State([
             center_transform.translation.x / (VIEWPORT_W / SCALE / 2.0),

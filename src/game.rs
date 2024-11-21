@@ -196,8 +196,12 @@ impl Game {
         })
     }
 
-    pub fn play_step(commands: &mut Commands, ev_step_action: &mut EventWriter<StepActionEvent>) {
-        ev_step_action.send(StepActionEvent::ThrusterRight);
+    pub fn play_step(
+        commands: &mut Commands,
+        ev_step_action: &mut EventWriter<StepActionEvent>,
+        action: StepActionEvent,
+    ) {
+        ev_step_action.send(action);
         commands.add(|world: &mut World| {
             world.run_schedule(PreGameStepSchedule);
         })

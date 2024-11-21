@@ -35,7 +35,11 @@ pub fn game_pre_step(
 
     // TODO: use holder.state and the model to calculate the better action
 
-    game::Game::play_step(&mut commands, &mut ev_step_action);
+    game::Game::play_step(
+        &mut commands,
+        &mut ev_step_action,
+        game::StepActionEvent::ThrusterLeft,
+    );
 }
 
 pub fn game_post_step(

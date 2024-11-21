@@ -149,8 +149,8 @@ pub struct StepResultEvent {
     done: bool,
 }
 impl StepResultEvent {
-    pub fn unpack(&self) -> (&State, &f32, &bool) {
-        (&self.next_state, &self.reward, &self.done)
+    pub fn unpack(self) -> (State, f32, bool) {
+        (self.next_state, self.reward, self.done)
     }
 }
 
@@ -518,12 +518,12 @@ fn game_init(
 
 fn game_pre_update(
     mut commands: Commands,
-    mut ev_step_action: EventReader<StepActionEvent>,
+    mut ev_step_action: ResMut<Events<StepActionEvent>>,
     q_game: Query<&Game>,
     q_center: Query<&Transform, With<LanderCenter>>,
     mut ev_step_result: EventWriter<StepResultEvent>,
 ) {
-    let action = ev_step_action.read().next().unwrap();
+    let action = ev_step_action.drain().next().unwrap();
 
     let game = q_game.single();
     let center_transform = q_center.get(game.center_id).unwrap();

@@ -7,8 +7,8 @@ pub struct GameHolder {
     total_points: f32,
 }
 
-pub fn init_game(mut commands: Commands, mut ev_init: EventReader<game::GameInitEvent>) {
-    let state = ev_init.read().next().unwrap().initial_state.clone();
+pub fn init_game(mut commands: Commands, mut ev_init: ResMut<Events<game::GameInitEvent>>) {
+    let state = ev_init.drain().next().unwrap().initial_state;
 
     commands.spawn(GameHolder {
         state,
@@ -18,11 +18,11 @@ pub fn init_game(mut commands: Commands, mut ev_init: EventReader<game::GameInit
 
 pub fn game_post_reset(
     mut q_holder: Query<&mut GameHolder>,
-    mut ev_reset: EventReader<game::GameResetEvent>,
+    mut ev_reset: ResMut<Events<game::GameResetEvent>>,
 ) {
     let mut holder = q_holder.single_mut();
 
-    holder.state = ev_reset.read().next().unwrap().initial_state.clone();
+    holder.state = ev_reset.drain().next().unwrap().initial_state;
     holder.total_points = 0.0;
 }
 
@@ -41,17 +41,17 @@ pub fn game_pre_step(
 pub fn game_post_step(
     mut commands: Commands,
     mut q_holder: Query<&mut GameHolder>,
-    mut ev_step_result: EventReader<game::StepResultEvent>,
+    mut ev_step_result: ResMut<Events<game::StepResultEvent>>,
 ) {
     let mut holder = q_holder.single_mut();
-    let (next_state, reward, done) = ev_step_result.read().next().unwrap().unpack();
+    let (next_state, reward, done) = ev_step_result.drain().next().unwrap().unpack();
 
     // TODO: train model, update buffer...
 
     holder.state = next_state.clone();
     holder.total_points += reward;
 
-    if *done {
+    if done {
         game::Game::reset(&mut commands);
     }
 }

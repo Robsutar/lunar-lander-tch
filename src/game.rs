@@ -187,6 +187,8 @@ pub struct Game {
     pub leg_ids: [Entity; 2],
     pub ground_id: Entity,
 
+    pub helipad_y: f32,
+
     pub wind: Option<Wind>,
 
     pub frame: usize,
@@ -516,6 +518,7 @@ fn game_init(
         center_id,
         leg_ids: leg_ids.try_into().unwrap(),
         ground_id,
+        helipad_y,
         wind: None,
         frame: 0,
         game_over: None,
@@ -523,8 +526,8 @@ fn game_init(
 
     ev_init.send(GameInitEvent {
         initial_state: State([
-            module_position.x,
-            module_position.y,
+            module_position.x / (VIEWPORT_W / SCALE / 2.0),
+            (module_position.y - (helipad_y + LEG_DOWN / SCALE)) / (VIEWPORT_H / SCALE / 2.0),
             0.0,
             0.0,
             0.0,
@@ -624,12 +627,13 @@ fn game_post_physics_update(
 
     let result = StepResultEvent {
         next_state: State([
-            center_transform.translation.x,
-            center_transform.translation.y,
-            center_velocity.linvel.x,
-            center_velocity.linvel.y,
+            center_transform.translation.x / (VIEWPORT_W / SCALE / 2.0),
+            (center_transform.translation.y - (game.helipad_y + LEG_DOWN / SCALE))
+                / (VIEWPORT_H / SCALE / 2.0),
+            center_velocity.linvel.x * (VIEWPORT_W / SCALE / 2.0) / FPS,
+            center_velocity.linvel.y * (VIEWPORT_H / SCALE / 2.0) / FPS,
             extract_2d_angle(center_transform.rotation),
-            center_velocity.angvel,
+            20.0 * center_velocity.angvel / FPS,
             if arm_states[0] == LegState::InGround {
                 1.0
             } else {

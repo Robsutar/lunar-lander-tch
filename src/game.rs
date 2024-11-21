@@ -254,11 +254,13 @@ impl Plugin for GamePlugin {
     }
 }
 
-fn init_assets(
+fn game_init(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut ev_init: EventWriter<GameInitEvent>,
 ) {
+    // Create assets
     let center_pbr = {
         let positions: Vec<[f32; 3]> = LANDER_POLY
             .iter()
@@ -319,44 +321,22 @@ fn init_assets(
         )
     };
 
-    let moon_material = materials.add(Color::WHITE);
+    let ground_material = materials.add(Color::WHITE);
 
-    commands.insert_resource(GameAssets {
-        center_pbr,
-        leg_pbr,
-        flag_pbr,
-        flag_handle_pbr,
-        ground_material: moon_material,
-    });
-}
-
-fn init_game(mut commands: Commands, assets: Res<GameAssets>, mut meshes: ResMut<Assets<Mesh>>) {
     let mut rng = rand::thread_rng();
 
-    // Create camera
-    commands.spawn(Camera2dBundle {
-        transform: Transform::from_scale(Vec3::new(
-            1.0 / SCALE / WINDOW_ZOOM,
-            1.0 / SCALE / WINDOW_ZOOM,
-            1.0 / SCALE / WINDOW_ZOOM,
-        )),
-        ..Default::default()
-    });
-
-    let w = VIEWPORT_W / SCALE;
+    let w: f32 = VIEWPORT_W / SCALE;
     let h = VIEWPORT_H / SCALE;
-
-    // Create the terrain.
     let chunks = 11;
+    let helipad_y = h / 4.0;
+
+    let terrain_poly = {
+        // Create the terrain.
     let chunk_x: Vec<f32> = (0..chunks)
         .map(|i| w / (chunks as f32 - 1.0) * i as f32)
         .collect();
 
     let mut height: Vec<f32> = (0..chunks).map(|_| rng.gen_range(0.0..h / 2.0)).collect();
-
-    let helipad_x1 = height[chunks / 2 - 1];
-    let helipad_x2 = height[chunks / 2 + 1];
-    let helipad_y = h / 4.0;
 
     // Helipad flag place.
     height[chunks / 2 - 2] = helipad_y;
@@ -379,6 +359,9 @@ fn init_game(mut commands: Commands, assets: Res<GameAssets>, mut meshes: ResMut
     }
     terrain_poly.push(Vec2::new(-w / 2.0, -0.0));
 
+        terrain_poly
+    };
+
     let terrain_mesh = {
         let mut earcut = earcut::Earcut::new();
         let mut terrain_indices: Vec<u32> = Vec::new();
@@ -399,12 +382,12 @@ fn init_game(mut commands: Commands, assets: Res<GameAssets>, mut meshes: ResMut
         Mesh2dHandle(meshes.add(terrain_mesh))
     };
 
-    commands
+    let ground_id = commands
         .spawn(Collider::polyline(terrain_poly, None))
         .insert(MaterialMesh2dBundle {
             transform: Transform::from_xyz(0.0, -h / 2.0, 0.0),
             mesh: terrain_mesh,
-            material: assets.ground_material.clone(),
+            material: ground_material.clone(),
             ..Default::default()
         })
         .with_children(|parent| {
@@ -413,23 +396,24 @@ fn init_game(mut commands: Commands, assets: Res<GameAssets>, mut meshes: ResMut
 
                 parent.spawn(MaterialMesh2dBundle {
                     transform: Transform::from_xyz(i * x_distance, helipad_y, 0.0),
-                    mesh: assets.flag_handle_pbr.0.clone(),
-                    material: assets.flag_handle_pbr.1.clone(),
+                    mesh: flag_handle_pbr.0.clone(),
+                    material: flag_handle_pbr.1.clone(),
                     ..Default::default()
                 });
                 parent.spawn(MaterialMesh2dBundle {
                     transform: Transform::from_xyz(i * x_distance, helipad_y, 0.0),
-                    mesh: assets.flag_pbr.0.clone(),
-                    material: assets.flag_pbr.1.clone(),
+                    mesh: flag_pbr.0.clone(),
+                    material: flag_pbr.1.clone(),
                     ..Default::default()
                 });
             }
-        });
+        })
+        .id();
 
     let module_position = Vec2::new(0.0, 5.0);
 
     // Create the module center.
-    let module_center = commands
+    let center_id = commands
         .spawn(RigidBody::Dynamic)
         .insert(
             Collider::convex_polyline(LANDER_POLY.iter().map(|a| *a / SCALE).collect()).unwrap(),
@@ -438,10 +422,12 @@ fn init_game(mut commands: Commands, assets: Res<GameAssets>, mut meshes: ResMut
         .insert(ColliderMassProperties::Density(5.0))
         .insert(MaterialMesh2dBundle {
             transform: Transform::from_xyz(module_position.x, module_position.y, 0.0),
-            mesh: assets.center_pbr.0.clone(),
-            material: assets.center_pbr.1.clone(),
+            mesh: center_pbr.0.clone(),
+            material: center_pbr.1.clone(),
             ..Default::default()
         })
+        .insert(Velocity::zero())
+        .insert(LanderCenter)
         .id();
 
     let leg_collider = Collider::convex_polyline(vec![
@@ -454,10 +440,11 @@ fn init_game(mut commands: Commands, assets: Res<GameAssets>, mut meshes: ResMut
     let leg_angle = 15f32.to_radians();
 
     // Create left and right legs.
+    let mut leg_ids = Vec::new();
     for i in [-1.0, 1.0] {
         let leg_translation = Vec2::new(i * LEG_AWAY / SCALE, 0.0);
 
-        commands
+        let leg_id = commands
             .spawn(RigidBody::Dynamic)
             .insert(Collider::compound(vec![(
                 Vec2::ZERO,
@@ -473,19 +460,48 @@ fn init_game(mut commands: Commands, assets: Res<GameAssets>, mut meshes: ResMut
                     0.0,
                 )
                 .with_rotation(Quat::from_rotation_z(i * leg_angle)),
-                mesh: assets.leg_pbr.0.clone(),
-                material: assets.leg_pbr.1.clone(),
+                mesh: leg_pbr.0.clone(),
+                material: leg_pbr.1.clone(),
                 ..Default::default()
             })
             .insert(ImpulseJoint::new(
-                module_center,
+                center_id,
                 RevoluteJointBuilder::new()
                     .local_anchor2(Vec2::new(0.0, 0.0)) // Leg anchor
                     .local_anchor1(leg_translation) // Module anchor
                     .limits([-leg_angle, leg_angle]) // Rotation limits
                     .motor(0.0, i * 0.3, 0.0, LEG_SPRING_TORQUE),
-            ));
+            ))
+            .id();
+
+        leg_ids.push(leg_id);
     }
+
+    commands.spawn(Game {
+        center_id,
+        leg_ids: leg_ids.try_into().unwrap(),
+        ground_id,
+        wind: None,
+        frame: 0,
+        game_over: None,
+    });
+
+    ev_init.send(GameInitEvent {
+        initial_state: State([
+            module_position.x,
+            module_position.y,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ]),
+    });
+
+    commands.add(|world: &mut World| {
+        world.run_schedule(PostGameInitSchedule);
+    })
 }
 
 fn game_updater(mut commands: Commands, time: Res<Time>, mut updater: ResMut<GameUpdater>) {

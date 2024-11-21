@@ -4,14 +4,13 @@ use bevy::{
     render::{
         mesh::{Indices, PrimitiveTopology},
         render_asset::RenderAssetUsages,
-        render_resource::ShaderType,
     },
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
 use bevy_rapier2d::prelude::*;
 use rand::Rng;
 
-pub const WINDOW_ZOOM: f32 = 2.0; // Affects only visually the scale of the window, adding zoom to camera.
+use crate::util::extract_2d_angle;
 
 pub const FPS: f32 = 50.0;
 pub const SCALE: f32 = 30.0; // Affects how fast-paced the game is, forces should be adjusted as well
@@ -41,6 +40,7 @@ pub const SIDE_ENGINE_AWAY: f32 = 12.0; // Horizontal distance off center
 pub const VIEWPORT_W: f32 = 600.0; // Width of the window
 pub const VIEWPORT_H: f32 = 400.0; // Height of the window
 
+#[derive(Clone)]
 pub struct State([f32; Self::SIZE]);
 impl State {
     pub const SIZE: usize = 8;
@@ -78,13 +78,24 @@ impl State {
     }
 }
 
-pub enum PlayStepAction {
+#[derive(Event)]
+pub struct GameInitEvent {
+    pub initial_state: State,
+}
+
+#[derive(Event)]
+pub struct GameResetEvent {
+    pub initial_state: State,
+}
+
+#[derive(Event)]
+pub enum StepActionEvent {
     Nothing,
     ThrusterLeft,
     ThrusterRight,
     ThrusterMain,
 }
-impl PlayStepAction {
+impl StepActionEvent {
     pub fn from_index(action_index: u8) -> Self {
         match action_index {
             0 => Self::Nothing,
@@ -103,14 +114,45 @@ impl PlayStepAction {
             Self::ThrusterMain => 3,
         }
     }
+
+    pub fn to_external_force(
+        &self,
+        center_rotation: Quat,
+        main_engine_power: f32,
+        side_engine_power: f32,
+    ) -> Option<ExternalForce> {
+        match self {
+            StepActionEvent::Nothing => None,
+            StepActionEvent::ThrusterLeft => Some(ExternalForce {
+                force: (center_rotation * Vec3::new(side_engine_power, 0.0, 0.0)).truncate(),
+                torque: 0.0,
+            }),
+            StepActionEvent::ThrusterRight => Some(ExternalForce {
+                force: (center_rotation * Vec3::new(-side_engine_power, 0.0, 0.0)).truncate(),
+                torque: 0.0,
+            }),
+            StepActionEvent::ThrusterMain => Some(ExternalForce {
+                force: (center_rotation * Vec3::new(0.0, main_engine_power, 0.0)).truncate(),
+                torque: 0.0,
+            }),
+        }
+    }
 }
 
-/// Next state, reward, done.
-///
-/// Next state: next state of the environment.
-/// Reward: reward for performing the action.
-/// Done: true if the episode ended.
-pub type PlayStepResult = (State, f32, bool);
+#[derive(Event, Clone)]
+pub struct StepResultEvent {
+    /// Next state of the environment, after the action.
+    next_state: State,
+    /// Reward for performing the action.
+    reward: f32,
+    /// True if the episode ended.
+    done: bool,
+}
+impl StepResultEvent {
+    pub fn unpack(&self) -> (&State, &f32, &bool) {
+        (&self.next_state, &self.reward, &self.done)
+    }
+}
 
 /// Wind effects applied to lander.
 pub struct Wind {
@@ -126,45 +168,67 @@ impl Default for Wind {
     }
 }
 
+#[derive(Component)]
+pub struct LanderCenter;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum LegState {
+    InAir,
+    InGround,
+}
+
+#[derive(Component)]
+pub struct Game {
+    pub center_id: Entity,
+    pub leg_ids: [Entity; 2],
+    pub ground_id: Entity,
+
+    pub wind: Option<Wind>,
+
+    pub frame: usize,
+
+    pub game_over: Option<StepResultEvent>,
+}
+
 pub type MeshMaterial2d = (Mesh2dHandle, Handle<ColorMaterial>);
 
-#[derive(Resource)]
-pub struct GameAssets {
-    center_pbr: MeshMaterial2d,
-    leg_pbr: MeshMaterial2d,
-    flag_pbr: MeshMaterial2d,
-    flag_handle_pbr: MeshMaterial2d,
-    ground_material: Handle<ColorMaterial>,
-}
+#[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct PostGameInitSchedule;
+
+#[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct GameResetSchedule;
+#[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct PostGameResetSchedule;
 
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct PreGameStepSchedule;
-
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
-pub struct GameStepSchedule;
-
+pub struct PhysicsStepSchedule;
+#[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct PostPhysicsStepSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct PostGameStepSchedule;
 
-#[derive(Resource)]
-pub struct GameUpdater {
-    timer: Timer,
-}
-
 pub struct GamePlugin {
     gravity: f32,
-    enable_wind: Option<Wind>,
 }
 impl Default for GamePlugin {
     fn default() -> Self {
-        Self {
-            gravity: -10.0,
-            enable_wind: None,
-        }
+        Self { gravity: -10.0 }
     }
 }
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
+        app.init_schedule(PostGameInitSchedule);
+
+        app.init_schedule(GameResetSchedule);
+        app.init_schedule(PostGameResetSchedule);
+
+        app.init_schedule(PreGameStepSchedule);
+        app.init_schedule(PhysicsStepSchedule);
+        app.init_schedule(PostPhysicsStepSchedule);
+        app.init_schedule(PostGameStepSchedule);
+
         app.insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, self.gravity),
             timestep_mode: TimestepMode::Fixed {
@@ -175,20 +239,18 @@ impl Plugin for GamePlugin {
         });
         app.add_plugins(
             RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1.0 / SCALE)
-                .in_schedule(GameStepSchedule),
+                .in_schedule(PhysicsStepSchedule),
         );
         app.add_plugins(RapierDebugRenderPlugin::default());
 
-        app.add_systems(Startup, init_assets);
-        app.add_systems(PostStartup, init_game);
+        app.add_event::<GameInitEvent>();
+        app.add_event::<GameResetEvent>();
+        app.add_event::<StepActionEvent>();
+        app.add_event::<StepResultEvent>();
 
-        app.init_schedule(PreGameStepSchedule);
-        app.init_schedule(GameStepSchedule);
-        app.init_schedule(PostGameStepSchedule);
-        app.insert_resource(GameUpdater {
-            timer: Timer::from_seconds(1.0 / FPS, TimerMode::Repeating),
-        });
-        app.add_systems(Update, game_updater);
+        app.add_systems(PostStartup, game_init);
+        app.add_systems(PreGameStepSchedule, game_pre_update);
+        app.add_systems(PostPhysicsStepSchedule, game_post_physics_update);
     }
 }
 

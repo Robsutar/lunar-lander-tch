@@ -284,6 +284,7 @@ impl Plugin for GamePlugin {
         app.add_event::<StepResultEvent>();
 
         app.add_systems(PostStartup, game_init);
+        app.add_systems(GameResetSchedule, game_reset);
 
         app.add_systems(Update, update_available_schedule);
         app.add_systems(PreGameStepSchedule, game_pre_update);
@@ -555,9 +556,81 @@ fn game_init(
             0.0,
         ]),
     });
-
     commands.add(|world: &mut World| {
         world.run_schedule(PostGameInitSchedule);
+    })
+}
+
+fn game_reset(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut q_game: Query<&mut Game>,
+    mut ev_reset: EventWriter<GameResetEvent>,
+) {
+    let mut game = q_game.single_mut();
+
+    commands.entity(game.ground_id).despawn_recursive();
+
+    let w: f32 = VIEWPORT_W / SCALE;
+    let h = VIEWPORT_H / SCALE;
+    let chunks = 11;
+    let helipad_y = h / 4.0;
+
+    let ground_id = spawn_terrain_poly_mesh(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        chunks,
+        w,
+        h,
+        helipad_y,
+    );
+    game.ground_id = ground_id;
+
+    let center_position = Vec2::new(0.0, VIEWPORT_H / SCALE / 2.0);
+
+    commands
+        .entity(game.center_id)
+        .insert(Transform::from_translation(Vec3::new(
+            center_position.x,
+            center_position.y,
+            0.0,
+        )))
+        .insert(Velocity::zero())
+        .remove::<ExternalImpulse>();
+
+    for (index, i) in [-1.0, 1.0].into_iter().enumerate() {
+        let leg = game.leg_ids[index];
+        let leg_translation = Vec2::new(i * LEG_AWAY / SCALE, 0.0);
+
+        commands
+            .entity(leg)
+            .insert(Transform::from_xyz(
+                center_position.x + leg_translation.x,
+                center_position.y + leg_translation.y,
+                0.0,
+            ))
+            .insert(Velocity::zero());
+    }
+
+    game.frame = 0;
+    game.game_over = None;
+
+    ev_reset.send(GameResetEvent {
+        initial_state: State([
+            center_position.x / (VIEWPORT_W / SCALE / 2.0),
+            (center_position.y - (game.helipad_y + LEG_DOWN / SCALE)) / (VIEWPORT_H / SCALE / 2.0),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ]),
+    });
+    commands.add(|world: &mut World| {
+        world.run_schedule(PostGameResetSchedule);
     })
 }
 
@@ -625,21 +698,21 @@ fn game_post_physics_update(
         q_center.get(game.center_id).unwrap();
 
     // Read state after actions applied
-    let mut arm_states = [LegState::InAir; 2];
+    let mut leg_states = [LegState::InAir; 2];
 
-    for (i, arm) in game.leg_ids.iter().enumerate() {
-        let arm = *arm;
+    for (i, leg) in game.leg_ids.iter().enumerate() {
+        let leg = *leg;
 
-        for contact_pair in rapier_context.contact_pairs_with(arm) {
+        for contact_pair in rapier_context.contact_pairs_with(leg) {
             if contact_pair.has_any_active_contact() {
-                let other_collider = if contact_pair.collider1() == arm {
+                let other_collider = if contact_pair.collider1() == leg {
                     contact_pair.collider2()
                 } else {
                     contact_pair.collider1()
                 };
 
                 if other_collider == game.ground_id {
-                    arm_states[i] = LegState::InGround;
+                    leg_states[i] = LegState::InGround;
                 }
             }
         }
@@ -674,7 +747,7 @@ fn game_post_physics_update(
             (100.0, true)
         } else {
             // TODO:
-            (100.0, true)
+            (100.0, false)
         }
     };
 
@@ -687,12 +760,12 @@ fn game_post_physics_update(
             center_velocity.linvel.y * (VIEWPORT_H / SCALE / 2.0) / FPS,
             extract_2d_angle(center_transform.rotation),
             20.0 * center_velocity.angvel / FPS,
-            if arm_states[0] == LegState::InGround {
+            if leg_states[0] == LegState::InGround {
                 1.0
             } else {
                 0.0
             },
-            if arm_states[1] == LegState::InGround {
+            if leg_states[1] == LegState::InGround {
                 1.0
             } else {
                 0.0

@@ -189,23 +189,35 @@ pub struct Game {
 
     pub game_over: Option<StepResultEvent>,
 }
+impl Game {
+    pub fn reset(commands: &mut Commands) {
+        commands.add(|world: &mut World| {
+            world.run_schedule(GameResetSchedule);
+        })
+    }
 
-pub type MeshMaterial2d = (Mesh2dHandle, Handle<ColorMaterial>);
+    pub fn play_step(commands: &mut Commands, ev_step_action: &mut EventWriter<StepActionEvent>) {
+        ev_step_action.send(StepActionEvent::ThrusterRight);
+        commands.add(|world: &mut World| {
+            world.run_schedule(PreGameStepSchedule);
+        })
+    }
+}
 
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct PostGameInitSchedule;
 
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
-pub struct GameResetSchedule;
+struct GameResetSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct PostGameResetSchedule;
 
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
-pub struct PreGameStepSchedule;
+struct PreGameStepSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
-pub struct PhysicsStepSchedule;
+struct PhysicsStepSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
-pub struct PostPhysicsStepSchedule;
+struct PostPhysicsStepSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct PostGameStepSchedule;
 

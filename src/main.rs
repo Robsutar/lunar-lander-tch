@@ -72,11 +72,8 @@ fn game_pre_step(
     let mut holder = q_holder.single_mut();
 
     // TODO: use holder.state and the model to calculate the better action
-    ev_step_action.send(game::StepActionEvent::ThrusterRight);
 
-    commands.add(|world: &mut World| {
-        world.run_schedule(game::PreGameStepSchedule);
-    })
+    game::Game::play_step(&mut commands, &mut ev_step_action);
 }
 
 fn game_post_step(
@@ -93,8 +90,6 @@ fn game_post_step(
     holder.total_points += reward;
 
     if *done {
-        commands.add(|world: &mut World| {
-            world.run_schedule(game::GameResetSchedule);
-        })
+        game::Game::reset(&mut commands);
     }
 }

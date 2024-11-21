@@ -34,3 +34,67 @@ fn main() {
 
     app.run();
 }
+
+fn init_game(mut commands: Commands, mut ev_init: EventReader<game::GameInitEvent>) {
+    let state = ev_init.read().next().unwrap().initial_state.clone();
+
+    commands.spawn(GameHolder {
+        state,
+        total_points: 0.0,
+    });
+
+    // Create camera
+    commands.spawn(Camera2dBundle {
+        transform: Transform::from_scale(Vec3::new(
+            1.0 / game::SCALE / WINDOW_ZOOM,
+            1.0 / game::SCALE / WINDOW_ZOOM,
+            1.0 / game::SCALE / WINDOW_ZOOM,
+        )),
+        ..Default::default()
+    });
+}
+
+fn game_post_reset(
+    mut q_holder: Query<&mut GameHolder>,
+    mut ev_reset: EventReader<game::GameResetEvent>,
+) {
+    let mut holder = q_holder.single_mut();
+
+    holder.state = ev_reset.read().next().unwrap().initial_state.clone();
+    holder.total_points = 0.0;
+}
+
+fn game_pre_step(
+    mut commands: Commands,
+    mut q_holder: Query<&mut GameHolder>,
+    mut ev_step_action: EventWriter<game::StepActionEvent>,
+) {
+    let mut holder = q_holder.single_mut();
+
+    // TODO: use holder.state and the model to calculate the better action
+    ev_step_action.send(game::StepActionEvent::ThrusterRight);
+
+    commands.add(|world: &mut World| {
+        world.run_schedule(game::PreGameStepSchedule);
+    })
+}
+
+fn game_post_step(
+    mut commands: Commands,
+    mut q_holder: Query<&mut GameHolder>,
+    mut ev_step_result: EventReader<game::StepResultEvent>,
+) {
+    let mut holder = q_holder.single_mut();
+    let (next_state, reward, done) = ev_step_result.read().next().unwrap().unpack();
+
+    // TODO: train model, update buffer...
+
+    holder.state = next_state.clone();
+    holder.total_points += reward;
+
+    if *done {
+        commands.add(|world: &mut World| {
+            world.run_schedule(game::GameResetSchedule);
+        })
+    }
+}

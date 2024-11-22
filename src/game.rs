@@ -525,6 +525,9 @@ fn game_init(
 
     let center_position = Vec2::new(0.0, VIEWPORT_H / SCALE / 2.0);
 
+    // TODO: find better value to this
+    let arbitrary_force_i = 0.001;
+
     // Create the module center.
     let center_id = commands
         .spawn(RigidBody::Dynamic)
@@ -547,8 +550,12 @@ fn game_init(
         ))
         .insert(ExternalImpulse {
             impulse: Vec2::new(
-                rng.gen_range(-INITIAL_RANDOM..INITIAL_RANDOM),
-                rng.gen_range(-INITIAL_RANDOM..INITIAL_RANDOM),
+                rng.gen_range(
+                    -INITIAL_RANDOM * arbitrary_force_i..INITIAL_RANDOM * arbitrary_force_i,
+                ),
+                rng.gen_range(
+                    -INITIAL_RANDOM * arbitrary_force_i..INITIAL_RANDOM * arbitrary_force_i,
+                ),
             ),
             torque_impulse: 0.0,
         })

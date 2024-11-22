@@ -390,6 +390,11 @@ fn spawn_terrain_poly_mesh(
             ..Default::default()
         })
         .insert(CollisionGroups::new(GROUND_COLLISION_GROUP, Group::ALL))
+        .insert(Friction {
+            coefficient: 0.1,
+            combine_rule: CoefficientCombineRule::Min,
+            ..Default::default()
+        })
         .id()
 }
 

@@ -199,20 +199,6 @@ impl StepResultEvent {
     }
 }
 
-/// Wind effects applied to lander.
-pub struct Wind {
-    power: f32,
-    turbulence_power: f32,
-}
-impl Default for Wind {
-    fn default() -> Self {
-        Self {
-            power: 15.0,
-            turbulence_power: 1.5,
-        }
-    }
-}
-
 #[derive(Component)]
 pub struct LanderCenter;
 
@@ -231,7 +217,6 @@ pub struct Game {
     pub ground_id: Entity,
 
     pub helipad_y: f32,
-    pub wind: Option<Wind>,
 
     pub frame: usize,
     pub is_finished: Option<StepResultEvent>,
@@ -626,7 +611,6 @@ fn game_init(
         ground_id,
 
         helipad_y,
-        wind: None,
 
         frame: 0,
         is_finished: None,

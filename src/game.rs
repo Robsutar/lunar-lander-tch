@@ -278,7 +278,6 @@ impl Plugin for GamePlugin {
             RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1.0 / SCALE)
                 .in_schedule(PhysicsStepSchedule),
         );
-        app.add_plugins(RapierDebugRenderPlugin::default());
 
         app.add_event::<GameInitEvent>();
         app.add_event::<GameResetEvent>();

@@ -16,8 +16,5 @@ bevy_egui = "0.30.0"
 egui_plot = "0.29.0"
 rand = "0.8.5"
 tch = { version = "0.18.0", features = ["download-libtorch"] }
-bevy_rapier2d = { version = "0.27.0", features = [
-    "simd-stable",
-    "debug-render-2d",
-] }
+bevy_rapier2d = { version = "0.27.0", features = ["simd-stable"] }
 earcut = "0.4.2"

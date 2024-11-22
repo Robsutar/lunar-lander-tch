@@ -34,7 +34,7 @@ pub const LEG_AWAY: f32 = 20.0; // Horizontal distance off center
 pub const LEG_DOWN: f32 = 18.0; // Vertical distance off center
 pub const LEG_W: f32 = 2.0; // Leg width
 pub const LEG_H: f32 = 8.0; // Leg height
-pub const LEG_SPRING_TORQUE: f32 = 40.0;
+pub const LEG_SPRING_TORQUE: f32 = 40.0 * 2000.0; // 2000.0 is an arbitrary value to make rapier2d accord to box2d
 
 pub const SIDE_ENGINE_HEIGHT: f32 = 14.0;
 pub const SIDE_ENGINE_AWAY: f32 = 12.0; // Horizontal distance off center
@@ -393,7 +393,6 @@ fn spawn_terrain_poly_mesh(
         .insert(Friction {
             coefficient: 0.1,
             combine_rule: CoefficientCombineRule::Min,
-            ..Default::default()
         })
         .id()
 }
@@ -553,9 +552,9 @@ fn game_init(
         let leg_translation = Vec2::new(i * LEG_AWAY / SCALE, 0.0);
 
         let joint_limits = if i == -1.0 {
-            [-leg_angle, 0.0]
+            [-leg_angle * 2.0, 0.0]
         } else {
-            [0.0, leg_angle]
+            [0.0, leg_angle * 2.0]
         };
 
         let leg_id = commands
@@ -584,7 +583,7 @@ fn game_init(
                     .local_anchor2(Vec2::new(0.0, 0.0)) // Leg anchor
                     .local_anchor1(leg_translation) // Module anchor
                     .limits(joint_limits) // Rotation limits
-                    .motor(0.0, i * 0.3, 0.0, LEG_SPRING_TORQUE),
+                    .motor_position(i * leg_angle, LEG_SPRING_TORQUE, 150.0),
             ))
             .insert(CollisionGroups::new(
                 Group::GROUP_12,

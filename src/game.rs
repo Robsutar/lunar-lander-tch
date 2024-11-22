@@ -562,6 +562,12 @@ fn game_init(
     for i in [-1.0, 1.0] {
         let leg_translation = Vec2::new(i * LEG_AWAY / SCALE, 0.0);
 
+        let joint_limits = if i == -1.0 {
+            [-leg_angle, 0.0]
+        } else {
+            [0.0, leg_angle]
+        };
+
         let leg_id = commands
             .spawn(RigidBody::Dynamic)
             .insert(Collider::compound(vec![(
@@ -587,7 +593,7 @@ fn game_init(
                 RevoluteJointBuilder::new()
                     .local_anchor2(Vec2::new(0.0, 0.0)) // Leg anchor
                     .local_anchor1(leg_translation) // Module anchor
-                    .limits([-leg_angle, leg_angle]) // Rotation limits
+                    .limits(joint_limits) // Rotation limits
                     .motor(0.0, i * 0.3, 0.0, LEG_SPRING_TORQUE),
             ))
             .insert(CollisionGroups::new(

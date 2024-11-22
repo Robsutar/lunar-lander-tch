@@ -17,10 +17,10 @@ use crate::{particle::*, util::*};
 pub const FPS: f32 = 50.0;
 pub const SCALE: f32 = 30.0; // Affects how fast-paced the game is, forces should be adjusted as well
 
-pub const MAIN_ENGINE_POWER: f32 = 13.0;
+pub const MAIN_ENGINE_POWER: f32 = 13.0 * 0.1; // 0.1 is an arbitrary value to make rapier2d accord to box2d
 pub const SIDE_ENGINE_POWER: f32 = 0.6;
 
-pub const INITIAL_RANDOM: f32 = 1000.0; // Set 1500 to make game harder
+pub const INITIAL_RANDOM: f32 = 1000.0 * 0.001; // Set 1500 to make game harder, 0.001 is an arbitrary value to make rapier2d accord to box2d
 
 pub const LANDER_POLY: [Vec2; 6] = [
     Vec2::new(-14.0, 17.0),  // Left Upper
@@ -156,15 +156,10 @@ impl StepActionEvent {
                 Vec2::new(SIDE_ENGINE_AWAY / SCALE, 0.0),
                 Vec2::new(-SIDE_ENGINE_POWER * 300.0 / SCALE, 0.0),
             ),
-            StepActionEvent::ThrusterMain => {
-                // TODO: find better value to this
-                let arbitrary_force_m = 0.1;
-
-                (
-                    Vec2::new(0.0, -SIDE_ENGINE_HEIGHT / SCALE),
-                    Vec2::new(0.0, -MAIN_ENGINE_POWER * arbitrary_force_m * 300.0 / SCALE),
-                )
-            }
+            StepActionEvent::ThrusterMain => (
+                Vec2::new(0.0, -SIDE_ENGINE_HEIGHT / SCALE),
+                Vec2::new(0.0, -MAIN_ENGINE_POWER * 300.0 / SCALE),
+            ),
         };
 
         center_transform.translation +=
@@ -509,9 +504,6 @@ fn game_init(
 
     let center_position = Vec2::new(0.0, VIEWPORT_H / SCALE / 2.0);
 
-    // TODO: find better value to this
-    let arbitrary_force_i = 0.001;
-
     // Create the module center.
     let center_id = commands
         .spawn(RigidBody::Dynamic)
@@ -534,12 +526,8 @@ fn game_init(
         ))
         .insert(ExternalImpulse {
             impulse: Vec2::new(
-                rng.gen_range(
-                    -INITIAL_RANDOM * arbitrary_force_i..INITIAL_RANDOM * arbitrary_force_i,
-                ),
-                rng.gen_range(
-                    -INITIAL_RANDOM * arbitrary_force_i..INITIAL_RANDOM * arbitrary_force_i,
-                ),
+                rng.gen_range(-INITIAL_RANDOM..INITIAL_RANDOM),
+                rng.gen_range(-INITIAL_RANDOM..INITIAL_RANDOM),
             ),
             torque_impulse: 0.0,
         })
@@ -653,9 +641,6 @@ fn game_reset(
 
     let center_position = Vec2::new(0.0, VIEWPORT_H / SCALE / 2.0);
 
-    // TODO: find better value to this
-    let arbitrary_force_i = 0.001;
-
     commands
         .entity(game.center_id)
         .insert(Transform::from_translation(Vec3::new(
@@ -666,12 +651,8 @@ fn game_reset(
         .insert(Velocity::zero())
         .insert(ExternalImpulse {
             impulse: Vec2::new(
-                rng.gen_range(
-                    -INITIAL_RANDOM * arbitrary_force_i..INITIAL_RANDOM * arbitrary_force_i,
-                ),
-                rng.gen_range(
-                    -INITIAL_RANDOM * arbitrary_force_i..INITIAL_RANDOM * arbitrary_force_i,
-                ),
+                rng.gen_range(-INITIAL_RANDOM..INITIAL_RANDOM),
+                rng.gen_range(-INITIAL_RANDOM..INITIAL_RANDOM),
             ),
             torque_impulse: 0.0,
         });
@@ -737,13 +718,10 @@ fn game_pre_update(
         return;
     }
 
-    // TODO: find better value to this
-    let arbitrary_force_m = 0.1;
-
     // Apply action in simulation
     if let Some(force) = action.to_force(
         center_transform.rotation,
-        MAIN_ENGINE_POWER * arbitrary_force_m,
+        MAIN_ENGINE_POWER,
         SIDE_ENGINE_POWER,
     ) {
         commands.entity(game.center_id).insert(force);

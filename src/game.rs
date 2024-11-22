@@ -124,24 +124,21 @@ impl StepActionEvent {
         center_rotation: Quat,
         main_engine_power: f32,
         side_engine_power: f32,
-    ) -> ExternalImpulse {
+    ) -> Option<ExternalImpulse> {
         match self {
-            StepActionEvent::Nothing => ExternalImpulse {
-                impulse: Vec2::ZERO,
-                torque_impulse: 0.0,
-            },
-            StepActionEvent::ThrusterLeft => ExternalImpulse {
+            StepActionEvent::Nothing => None,
+            StepActionEvent::ThrusterLeft => Some(ExternalImpulse {
                 impulse: (center_rotation * Vec3::new(side_engine_power, 0.0, 0.0)).truncate(),
                 torque_impulse: 0.0,
-            },
-            StepActionEvent::ThrusterRight => ExternalImpulse {
+            }),
+            StepActionEvent::ThrusterRight => Some(ExternalImpulse {
                 impulse: (center_rotation * Vec3::new(-side_engine_power, 0.0, 0.0)).truncate(),
                 torque_impulse: 0.0,
-            },
-            StepActionEvent::ThrusterMain => ExternalImpulse {
+            }),
+            StepActionEvent::ThrusterMain => Some(ExternalImpulse {
                 impulse: (center_rotation * Vec3::new(0.0, main_engine_power, 0.0)).truncate(),
                 torque_impulse: 0.0,
-            },
+            }),
         }
     }
 
@@ -749,12 +746,13 @@ fn game_pre_update(
     let arbitrary_force_m = 0.1;
 
     // Apply action in simulation
-    commands.entity(game.center_id).insert(action.to_force(
+    if let Some(force) = action.to_force(
         center_transform.rotation,
         MAIN_ENGINE_POWER * arbitrary_force_m,
         SIDE_ENGINE_POWER,
-    ));
-
+    ) {
+        commands.entity(game.center_id).insert(force);
+    }
     // % 4 to avoid lag in debug mode
     if game.frame % 4 == 0 {
         if let Some(spawn_particle) =

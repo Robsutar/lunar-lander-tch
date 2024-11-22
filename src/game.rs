@@ -220,6 +220,7 @@ pub struct Game {
 
     frame: usize,
     next_post_update_call: PostUpdateCall,
+    prev_shaping: Option<f32>,
     is_finished: Option<StepResultEvent>,
 }
 impl Game {
@@ -612,6 +613,7 @@ fn game_init(
 
         frame: 0,
         next_post_update_call: PostUpdateCall::GameReset,
+        prev_shaping: None,
         is_finished: None,
     });
 
@@ -690,6 +692,7 @@ fn game_reset(
 
     game.frame = 0;
     game.next_post_update_call = PostUpdateCall::GameReset;
+    game.prev_shaping = None;
     game.is_finished = None;
 
     commands.add(|world: &mut World| {
@@ -859,8 +862,40 @@ fn game_post_physics_update(
                 {
                     (-100.0, true)
                 } else {
-                    // TODO:
-                    (100.0, false)
+                    let shaping = {
+                        let position_distance = -100.0
+                            * (next_state.position_x().powi(2) + next_state.position_y().powi(2))
+                                .sqrt();
+                        let velocity_penalty = -100.0
+                            * (next_state.velocity_x().powi(2) + next_state.velocity_y().powi(2))
+                                .sqrt();
+                        let angle_penalty = -100.0 * next_state.orientation_angle().abs();
+                        let leg_contact_reward = 10.0 * next_state.left_leg_contact()
+                            + 10.0 * next_state.right_leg_contact();
+
+                        position_distance + velocity_penalty + angle_penalty + leg_contact_reward
+                    };
+
+                    let reward = {
+                        let (m_power, s_power) = match action {
+                            StepActionEvent::Nothing => (0.0, 0.0),
+                            StepActionEvent::ThrusterLeft => (0.0, 1.0),
+                            StepActionEvent::ThrusterRight => (0.0, 1.0),
+                            StepActionEvent::ThrusterMain => (1.0, 0.0),
+                        };
+
+                        let fuel_penalty = m_power * 0.30 + s_power * 0.03;
+                        let delta_shaping = if let Some(prev_shaping) = game.prev_shaping {
+                            shaping - prev_shaping
+                        } else {
+                            0.0
+                        };
+
+                        game.prev_shaping = Some(shaping);
+                        delta_shaping - fuel_penalty
+                    };
+
+                    (reward, false)
                 }
             };
 

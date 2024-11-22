@@ -1,13 +1,16 @@
 use std::time::{Duration, Instant};
 
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*, sprite::Mesh2dHandle};
+use bevy_rapier2d::prelude::*;
 
 #[derive(Component, Clone)]
 pub struct Particle {
     pub lifetime: Duration,
     pub color: Handle<ColorMaterial>,
     pub mesh: Mesh2dHandle,
-    pub friction: Vec2,
+    pub friction: f32,
+    pub collision_radius: f32,
+    pub collision_groups: CollisionGroups,
 }
 
 #[derive(Event, Clone)]
@@ -20,9 +23,7 @@ pub struct SpawnParticleEvent {
 #[derive(Component)]
 struct SpawnedParticle {
     lifetime: Duration,
-    friction: Vec2,
     spawn_instant: Instant,
-    velocity: Vec2,
 }
 
 pub struct ParticlePlugin<T: ScheduleLabel + Clone> {
@@ -44,42 +45,47 @@ fn spawn_pending_particles(
     mut commands: Commands,
     mut ev_spawn_particle: ResMut<Events<SpawnParticleEvent>>,
 ) {
+    if false {
+        return;
+    }
+
     let now = Instant::now();
     for spawning in ev_spawn_particle.drain() {
         commands
-            .spawn(ColorMesh2dBundle {
+            .spawn(RigidBody::Dynamic)
+            .insert(Collider::ball(spawning.particle.collision_radius))
+            .insert(Restitution::coefficient(0.3))
+            .insert(Damping {
+                linear_damping: spawning.particle.friction,
+                angular_damping: spawning.particle.friction,
+            })
+            .insert(Velocity {
+                linvel: spawning.initial_velocity,
+                angvel: 0.0,
+            })
+            .insert(ColorMesh2dBundle {
                 mesh: spawning.particle.mesh,
                 material: spawning.particle.color,
                 transform: spawning.initial_transform,
                 ..Default::default()
             })
+            .insert(spawning.particle.collision_groups)
             .insert(SpawnedParticle {
                 lifetime: spawning.particle.lifetime,
-                friction: spawning.particle.friction,
                 spawn_instant: now,
-                velocity: spawning.initial_velocity,
             });
     }
 }
 
 fn update_spawned_particles(
-    time: Res<Time>,
     mut commands: Commands,
-    mut q_spawned_particles: Query<(Entity, &mut Transform, &mut SpawnedParticle)>,
+    mut q_spawned_particles: Query<(Entity, &SpawnedParticle)>,
 ) {
-    let dt = time.delta_seconds();
     let now = Instant::now();
 
-    for (entity, mut transform, mut spawned) in q_spawned_particles.iter_mut() {
+    for (entity, spawned) in q_spawned_particles.iter_mut() {
         if now - spawned.spawn_instant >= spawned.lifetime {
-            commands.entity(entity).despawn();
-            continue;
+            commands.entity(entity).despawn_recursive();
         }
-
-        let velocity_reducer = 1.0 - spawned.friction * dt;
-        spawned.velocity *= velocity_reducer;
-
-        let transform_add = transform.rotation * spawned.velocity.extend(0.0) * dt;
-        transform.translation += transform_add;
     }
 }

@@ -1,6 +1,7 @@
 mod controller_ai;
 mod controller_human;
 mod game;
+mod particle;
 mod util;
 
 use bevy::{prelude::*, window::WindowResolution};

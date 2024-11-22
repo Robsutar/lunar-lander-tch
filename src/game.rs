@@ -269,7 +269,7 @@ impl Plugin for GamePlugin {
         app.insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, self.gravity),
             timestep_mode: TimestepMode::Fixed {
-                dt: 1.0 / 60.0,
+                dt: 1.0 / FPS,
                 substeps: SCALE as usize,
             },
             ..RapierConfiguration::new(1.0)

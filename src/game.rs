@@ -419,6 +419,8 @@ fn game_init(
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut ev_init: EventWriter<GameInitEvent>,
 ) {
+    let mut rng = rand::thread_rng();
+
     // Create assets
     let thruster_particle = Particle {
         lifetime: Duration::from_millis(1500),
@@ -543,6 +545,13 @@ fn game_init(
             Group::GROUP_11,
             GROUND_COLLISION_GROUP,
         ))
+        .insert(ExternalImpulse {
+            impulse: Vec2::new(
+                rng.gen_range(-INITIAL_RANDOM..INITIAL_RANDOM),
+                rng.gen_range(-INITIAL_RANDOM..INITIAL_RANDOM),
+            ),
+            torque_impulse: 0.0,
+        })
         .id();
 
     let leg_collider = Collider::convex_polyline(vec![

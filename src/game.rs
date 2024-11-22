@@ -796,6 +796,26 @@ fn game_post_physics_update(
         }
     }
 
+    let next_state = State([
+        center_transform.translation.x / (VIEWPORT_W / SCALE / 2.0),
+        (center_transform.translation.y - (game.helipad_y + LEG_DOWN / SCALE))
+            / (VIEWPORT_H / SCALE / 2.0),
+        center_velocity.linvel.x * (VIEWPORT_W / SCALE / 2.0) / FPS,
+        center_velocity.linvel.y * (VIEWPORT_H / SCALE / 2.0) / FPS,
+        extract_2d_angle(center_transform.rotation),
+        20.0 * center_velocity.angvel / FPS,
+        if leg_states[0] == LegState::InGround {
+            1.0
+        } else {
+            0.0
+        },
+        if leg_states[1] == LegState::InGround {
+            1.0
+        } else {
+            0.0
+        },
+    ]);
+
     let (reward, done) = {
         if let Some(_) = rapier_context
             .contact_pairs_with(game.center_id)
@@ -823,6 +843,11 @@ fn game_post_physics_update(
             .is_sleeping()
         {
             (100.0, true)
+        } else if next_state.position_x() > 1.0
+            || next_state.position_x() < -1.0
+            || next_state.position_y() > 1.0
+        {
+            (-100.0, true)
         } else {
             // TODO:
             (100.0, false)
@@ -830,25 +855,7 @@ fn game_post_physics_update(
     };
 
     let result = StepResultEvent {
-        next_state: State([
-            center_transform.translation.x / (VIEWPORT_W / SCALE / 2.0),
-            (center_transform.translation.y - (game.helipad_y + LEG_DOWN / SCALE))
-                / (VIEWPORT_H / SCALE / 2.0),
-            center_velocity.linvel.x * (VIEWPORT_W / SCALE / 2.0) / FPS,
-            center_velocity.linvel.y * (VIEWPORT_H / SCALE / 2.0) / FPS,
-            extract_2d_angle(center_transform.rotation),
-            20.0 * center_velocity.angvel / FPS,
-            if leg_states[0] == LegState::InGround {
-                1.0
-            } else {
-                0.0
-            },
-            if leg_states[1] == LegState::InGround {
-                1.0
-            } else {
-                0.0
-            },
-        ]),
+        next_state,
         reward,
         done,
     };

@@ -700,11 +700,11 @@ fn game_pre_update(
 fn game_post_physics_update(
     mut commands: Commands,
     rapier_context: Res<RapierContext>,
-    q_game: Query<&Game>,
+    mut q_game: Query<&mut Game>,
     q_center: Query<(&Transform, &Velocity, &RapierRigidBodyHandle), With<LanderCenter>>,
     mut ev_step_result: EventWriter<StepResultEvent>,
 ) {
-    let game = q_game.single();
+    let mut game = q_game.single_mut();
     let (center_transform, center_velocity, center_body_handle) =
         q_center.get(game.center_id).unwrap();
 
@@ -785,6 +785,8 @@ fn game_post_physics_update(
         reward,
         done,
     };
+
+    game.frame += 1;
 
     ev_step_result.send(result);
     commands.add(|world: &mut World| {

@@ -41,6 +41,8 @@ pub const SIDE_ENGINE_AWAY: f32 = 12.0; // Horizontal distance off center
 pub const VIEWPORT_W: f32 = 600.0; // Width of the window
 pub const VIEWPORT_H: f32 = 400.0; // Height of the window
 
+pub const GROUND_COLLISION_GROUP: Group = Group::GROUP_10;
+
 #[derive(Clone)]
 pub struct State([f32; Self::SIZE]);
 impl State {
@@ -365,6 +367,7 @@ fn spawn_terrain_poly_mesh(
             material: ground_material.clone(),
             ..Default::default()
         })
+        .insert(CollisionGroups::new(GROUND_COLLISION_GROUP, Group::ALL))
         .id()
 }
 
@@ -485,6 +488,10 @@ fn game_init(
         })
         .insert(Velocity::zero())
         .insert(LanderCenter)
+        .insert(CollisionGroups::new(
+            Group::GROUP_11,
+            GROUND_COLLISION_GROUP,
+        ))
         .id();
 
     let leg_collider = Collider::convex_polyline(vec![
@@ -528,6 +535,10 @@ fn game_init(
                     .local_anchor1(leg_translation) // Module anchor
                     .limits([-leg_angle, leg_angle]) // Rotation limits
                     .motor(0.0, i * 0.3, 0.0, LEG_SPRING_TORQUE),
+            ))
+            .insert(CollisionGroups::new(
+                Group::GROUP_12,
+                GROUND_COLLISION_GROUP,
             ))
             .id();
 

@@ -237,7 +237,7 @@ pub struct Game {
     pub wind: Option<Wind>,
 
     pub frame: usize,
-    pub game_over: Option<StepResultEvent>,
+    pub is_finished: Option<StepResultEvent>,
 }
 impl Game {
     pub fn reset(commands: &mut Commands) {
@@ -610,7 +610,7 @@ fn game_init(
         wind: None,
 
         frame: 0,
-        game_over: None,
+        is_finished: None,
     });
 
     ev_init.send(GameInitEvent {
@@ -684,7 +684,7 @@ fn game_reset(
     }
 
     game.frame = 0;
-    game.game_over = None;
+    game.is_finished = None;
 
     ev_reset.send(GameResetEvent {
         initial_state: State([
@@ -731,7 +731,7 @@ fn game_pre_update(
     let center_transform = q_center.get(game.center_id).unwrap();
 
     // Check if the simulation is already finished
-    if let Some(result) = &game.game_over {
+    if let Some(result) = &game.is_finished {
         ev_step_result.send(result.clone());
         commands.add(|world: &mut World| {
             world.run_schedule(PostGameStepSchedule);
@@ -860,7 +860,11 @@ fn game_post_physics_update(
         done,
     };
 
-    game.frame += 1;
+    if done {
+        game.is_finished = Some(result.clone())
+    } else {
+        game.frame += 1;
+    }
 
     ev_step_result.send(result);
     commands.add(|world: &mut World| {

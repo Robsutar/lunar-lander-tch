@@ -640,6 +640,8 @@ fn game_reset(
     mut q_game: Query<&mut Game>,
     mut ev_reset: EventWriter<GameResetEvent>,
 ) {
+    let mut rng = rand::thread_rng();
+
     let mut game = q_game.single_mut();
 
     commands.entity(game.ground_id).despawn_recursive();
@@ -662,6 +664,9 @@ fn game_reset(
 
     let center_position = Vec2::new(0.0, VIEWPORT_H / SCALE / 2.0);
 
+    // TODO: find better value to this
+    let arbitrary_force_i = 0.001;
+
     commands
         .entity(game.center_id)
         .insert(Transform::from_translation(Vec3::new(
@@ -670,7 +675,17 @@ fn game_reset(
             0.0,
         )))
         .insert(Velocity::zero())
-        .remove::<ExternalImpulse>();
+        .insert(ExternalImpulse {
+            impulse: Vec2::new(
+                rng.gen_range(
+                    -INITIAL_RANDOM * arbitrary_force_i..INITIAL_RANDOM * arbitrary_force_i,
+                ),
+                rng.gen_range(
+                    -INITIAL_RANDOM * arbitrary_force_i..INITIAL_RANDOM * arbitrary_force_i,
+                ),
+            ),
+            torque_impulse: 0.0,
+        });
 
     for (index, i) in [-1.0, 1.0].into_iter().enumerate() {
         let leg = game.leg_ids[index];

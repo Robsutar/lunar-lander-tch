@@ -205,7 +205,7 @@ pub enum LegState {
 
 enum PostUpdateCall {
     GameReset,
-    GameStep,
+    GameStep(StepActionEvent),
 }
 
 #[derive(Component)]
@@ -716,13 +716,13 @@ fn game_pre_update(
     mut commands: Commands,
     mut ev_spawn_particle: EventWriter<SpawnParticleEvent>,
     mut ev_step_action: ResMut<Events<StepActionEvent>>,
-    q_game: Query<&Game>,
+    mut q_game: Query<&mut Game>,
     q_center: Query<&Transform, With<LanderCenter>>,
     mut ev_step_result: EventWriter<StepResultEvent>,
 ) {
     let action = ev_step_action.drain().next().unwrap();
 
-    let game = q_game.single();
+    let mut game = q_game.single_mut();
     let center_transform = q_center.get(game.center_id).unwrap();
 
     // Check if the simulation is already finished
@@ -753,6 +753,8 @@ fn game_pre_update(
             ev_spawn_particle.send(spawn_particle);
         }
     }
+
+    game.next_post_update_call = PostUpdateCall::GameStep(action);
 
     commands.add(|world: &mut World| {
         world.run_schedule(PhysicsStepSchedule);
@@ -813,10 +815,8 @@ fn game_post_physics_update(
         },
     ]);
 
-    match game.next_post_update_call {
+    match &game.next_post_update_call {
         PostUpdateCall::GameReset => {
-            game.next_post_update_call = PostUpdateCall::GameStep;
-
             ev_reset.send(GameResetEvent {
                 initial_state: next_state,
             });
@@ -824,7 +824,7 @@ fn game_post_physics_update(
                 world.run_schedule(PostGameResetSchedule);
             })
         }
-        PostUpdateCall::GameStep => {
+        PostUpdateCall::GameStep(action) => {
             let (reward, done) = {
                 if let Some(_) =
                     rapier_context

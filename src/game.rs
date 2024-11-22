@@ -203,18 +203,24 @@ pub enum LegState {
     InGround,
 }
 
+enum PostUpdateCall {
+    GameReset,
+    GameStep,
+}
+
 #[derive(Component)]
 pub struct Game {
-    pub thruster_particle: Particle,
+    thruster_particle: Particle,
 
-    pub center_id: Entity,
-    pub leg_ids: [Entity; 2],
-    pub ground_id: Entity,
+    center_id: Entity,
+    leg_ids: [Entity; 2],
+    ground_id: Entity,
 
-    pub helipad_y: f32,
+    helipad_y: f32,
 
-    pub frame: usize,
-    pub is_finished: Option<StepResultEvent>,
+    frame: usize,
+    next_post_update_call: PostUpdateCall,
+    is_finished: Option<StepResultEvent>,
 }
 impl Game {
     pub fn reset(commands: &mut Commands) {
@@ -253,7 +259,9 @@ struct PreGameStepSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 struct PhysicsStepSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
-struct PostPhysicsStepSchedule;
+struct ResetPostPhysicsStepSchedule;
+#[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
+struct StepPostPhysicsStepSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct PostGameStepSchedule;
 
@@ -274,7 +282,8 @@ impl Plugin for GamePlugin {
 
         app.init_schedule(PreGameStepSchedule);
         app.init_schedule(PhysicsStepSchedule);
-        app.init_schedule(PostPhysicsStepSchedule);
+        app.init_schedule(ResetPostPhysicsStepSchedule);
+        app.init_schedule(StepPostPhysicsStepSchedule);
         app.init_schedule(PostGameStepSchedule);
 
         app.insert_resource(GameUpdater {
@@ -294,7 +303,7 @@ impl Plugin for GamePlugin {
         );
 
         app.add_plugins(ParticlePlugin {
-            schedule: PostPhysicsStepSchedule,
+            schedule: PostGameStepSchedule,
         });
 
         app.add_event::<GameResetEvent>();
@@ -306,7 +315,8 @@ impl Plugin for GamePlugin {
 
         app.add_systems(Update, update_available_schedule);
         app.add_systems(PreGameStepSchedule, game_pre_update);
-        app.add_systems(PostPhysicsStepSchedule, game_post_physics_update);
+        app.add_systems(ResetPostPhysicsStepSchedule, game_post_physics_update);
+        app.add_systems(StepPostPhysicsStepSchedule, game_post_physics_update);
     }
 }
 
@@ -391,7 +401,6 @@ fn game_init(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut ev_init: EventWriter<GameResetEvent>,
 ) {
     let mut rng = rand::thread_rng();
 
@@ -602,24 +611,14 @@ fn game_init(
         helipad_y,
 
         frame: 0,
+        next_post_update_call: PostUpdateCall::GameReset,
         is_finished: None,
     });
 
-    ev_init.send(GameResetEvent {
-        initial_state: State([
-            center_position.x / (VIEWPORT_W / SCALE / 2.0),
-            (center_position.y - (helipad_y + LEG_DOWN / SCALE)) / (VIEWPORT_H / SCALE / 2.0),
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-        ]),
-    });
     commands.add(|world: &mut World| {
-        world.run_schedule(PostGameResetSchedule);
-    })
+        world.run_schedule(PhysicsStepSchedule);
+        world.run_schedule(ResetPostPhysicsStepSchedule);
+    });
 }
 
 fn game_reset(
@@ -627,7 +626,6 @@ fn game_reset(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut q_game: Query<&mut Game>,
-    mut ev_reset: EventWriter<GameResetEvent>,
 ) {
     let mut rng = rand::thread_rng();
 
@@ -691,23 +689,13 @@ fn game_reset(
     }
 
     game.frame = 0;
+    game.next_post_update_call = PostUpdateCall::GameReset;
     game.is_finished = None;
 
-    ev_reset.send(GameResetEvent {
-        initial_state: State([
-            center_position.x / (VIEWPORT_W / SCALE / 2.0),
-            (center_position.y - (game.helipad_y + LEG_DOWN / SCALE)) / (VIEWPORT_H / SCALE / 2.0),
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-        ]),
-    });
     commands.add(|world: &mut World| {
-        world.run_schedule(PostGameResetSchedule);
-    })
+        world.run_schedule(PhysicsStepSchedule);
+        world.run_schedule(ResetPostPhysicsStepSchedule);
+    });
 }
 
 fn update_available_schedule(
@@ -768,7 +756,7 @@ fn game_pre_update(
 
     commands.add(|world: &mut World| {
         world.run_schedule(PhysicsStepSchedule);
-        world.run_schedule(PostPhysicsStepSchedule);
+        world.run_schedule(StepPostPhysicsStepSchedule);
     });
 }
 
@@ -777,7 +765,8 @@ fn game_post_physics_update(
     rapier_context: Res<RapierContext>,
     mut q_game: Query<&mut Game>,
     q_center: Query<(&Transform, &Velocity, &RapierRigidBodyHandle), With<LanderCenter>>,
-    mut ev_step_result: EventWriter<StepResultEvent>,
+    mut ev_reset: EventWriter<GameResetEvent>,
+    mut ev_step: EventWriter<StepResultEvent>,
 ) {
     let mut game = q_game.single_mut();
     let (center_transform, center_velocity, center_body_handle) =
@@ -824,58 +813,73 @@ fn game_post_physics_update(
         },
     ]);
 
-    let (reward, done) = {
-        if let Some(_) = rapier_context
-            .contact_pairs_with(game.center_id)
-            .find(|contact_pair| {
-                if contact_pair.has_any_active_contact() {
-                    let other_collider = if contact_pair.collider1() == game.center_id {
-                        contact_pair.collider2()
-                    } else {
-                        contact_pair.collider1()
-                    };
+    match game.next_post_update_call {
+        PostUpdateCall::GameReset => {
+            game.next_post_update_call = PostUpdateCall::GameStep;
 
-                    if other_collider == game.ground_id {
-                        return true;
-                    }
-                }
-
-                false
+            ev_reset.send(GameResetEvent {
+                initial_state: next_state,
+            });
+            commands.add(|world: &mut World| {
+                world.run_schedule(PostGameResetSchedule);
             })
-        {
-            (-100.0, true)
-        } else if rapier_context
-            .bodies
-            .get(center_body_handle.0)
-            .unwrap()
-            .is_sleeping()
-        {
-            (100.0, true)
-        } else if next_state.position_x() > 1.0
-            || next_state.position_x() < -1.0
-            || next_state.position_y() > 1.0
-        {
-            (-100.0, true)
-        } else {
-            // TODO:
-            (100.0, false)
         }
-    };
+        PostUpdateCall::GameStep => {
+            let (reward, done) = {
+                if let Some(_) =
+                    rapier_context
+                        .contact_pairs_with(game.center_id)
+                        .find(|contact_pair| {
+                            if contact_pair.has_any_active_contact() {
+                                let other_collider = if contact_pair.collider1() == game.center_id {
+                                    contact_pair.collider2()
+                                } else {
+                                    contact_pair.collider1()
+                                };
 
-    let result = StepResultEvent {
-        next_state,
-        reward,
-        done,
-    };
+                                if other_collider == game.ground_id {
+                                    return true;
+                                }
+                            }
 
-    if done {
-        game.is_finished = Some(result.clone())
-    } else {
-        game.frame += 1;
+                            false
+                        })
+                {
+                    (-100.0, true)
+                } else if rapier_context
+                    .bodies
+                    .get(center_body_handle.0)
+                    .unwrap()
+                    .is_sleeping()
+                {
+                    (100.0, true)
+                } else if next_state.position_x() > 1.0
+                    || next_state.position_x() < -1.0
+                    || next_state.position_y() > 1.0
+                {
+                    (-100.0, true)
+                } else {
+                    // TODO:
+                    (100.0, false)
+                }
+            };
+
+            let result = StepResultEvent {
+                next_state,
+                reward,
+                done,
+            };
+
+            if done {
+                game.is_finished = Some(result.clone())
+            } else {
+                game.frame += 1;
+            }
+
+            ev_step.send(result);
+            commands.add(|world: &mut World| {
+                world.run_schedule(PostGameStepSchedule);
+            });
+        }
     }
-
-    ev_step_result.send(result);
-    commands.add(|world: &mut World| {
-        world.run_schedule(PostGameStepSchedule);
-    });
 }

@@ -1,17 +1,18 @@
+use std::time::Duration;
+
 use bevy::{
-    app::MainScheduleOrder,
-    ecs::schedule::{ScheduleBuildSettings, ScheduleLabel},
+    ecs::schedule::ScheduleLabel,
     prelude::*,
     render::{
         mesh::{Indices, PrimitiveTopology},
         render_asset::RenderAssetUsages,
     },
-    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
+    sprite::{ColorMesh2dBundle, Mesh2dHandle},
 };
 use bevy_rapier2d::prelude::*;
 use rand::Rng;
 
-use crate::util::extract_2d_angle;
+use crate::{particle::*, util::*};
 
 pub const FPS: f32 = 50.0;
 pub const SCALE: f32 = 30.0; // Affects how fast-paced the game is, forces should be adjusted as well
@@ -91,7 +92,7 @@ pub struct GameResetEvent {
     pub initial_state: State,
 }
 
-#[derive(Event)]
+#[derive(Event, PartialEq, Eq)]
 pub enum StepActionEvent {
     Nothing,
     ThrusterLeft,
@@ -143,6 +144,47 @@ impl StepActionEvent {
             },
         }
     }
+
+    fn to_spawn_particle(
+        &self,
+        thruster_particle: Particle,
+        mut center_transform: Transform,
+    ) -> Option<SpawnParticleEvent> {
+        if *self == StepActionEvent::Nothing {
+            return None;
+        }
+
+        let (translation, speed) = match self {
+            StepActionEvent::Nothing => panic!(),
+            StepActionEvent::ThrusterLeft => (
+                Vec2::new(-SIDE_ENGINE_AWAY / SCALE, 0.0),
+                Vec2::new(SIDE_ENGINE_POWER * 300.0 / SCALE, 0.0),
+            ),
+            StepActionEvent::ThrusterRight => (
+                Vec2::new(SIDE_ENGINE_AWAY / SCALE, 0.0),
+                Vec2::new(-SIDE_ENGINE_POWER * 300.0 / SCALE, 0.0),
+            ),
+            StepActionEvent::ThrusterMain => {
+                // TODO: find better value to this
+                let arbitrary_force_m = 0.1;
+
+                (
+                    Vec2::new(0.0, -SIDE_ENGINE_HEIGHT / SCALE),
+                    Vec2::new(0.0, -MAIN_ENGINE_POWER * arbitrary_force_m * 300.0 / SCALE),
+                )
+            }
+        };
+
+        center_transform.translation +=
+            center_transform.rotation * Vec3::new(translation.x, translation.y, 0.0);
+
+        Some(SpawnParticleEvent {
+            particle: thruster_particle,
+            initial_transform: center_transform,
+            initial_velocity: (center_transform.rotation * Vec3::new(-speed.x, speed.y, 0.0))
+                .truncate(),
+        })
+    }
 }
 
 #[derive(Event, Clone)]
@@ -185,16 +227,16 @@ pub enum LegState {
 
 #[derive(Component)]
 pub struct Game {
+    pub thruster_particle: Particle,
+
     pub center_id: Entity,
     pub leg_ids: [Entity; 2],
     pub ground_id: Entity,
 
     pub helipad_y: f32,
-
     pub wind: Option<Wind>,
 
     pub frame: usize,
-
     pub game_over: Option<StepResultEvent>,
 }
 impl Game {
@@ -279,6 +321,10 @@ impl Plugin for GamePlugin {
                 .in_schedule(PhysicsStepSchedule),
         );
 
+        app.add_plugins(ParticlePlugin {
+            schedule: PostPhysicsStepSchedule,
+        });
+
         app.add_event::<GameInitEvent>();
         app.add_event::<GameResetEvent>();
         app.add_event::<StepActionEvent>();
@@ -360,7 +406,7 @@ fn spawn_terrain_poly_mesh(
 
     commands
         .spawn(Collider::polyline(terrain_poly, None))
-        .insert(MaterialMesh2dBundle {
+        .insert(ColorMesh2dBundle {
             transform: Transform::from_xyz(0.0, -h / 2.0, 0.0),
             mesh: Mesh2dHandle(meshes.add(terrain_mesh)),
             material: ground_material.clone(),
@@ -377,6 +423,15 @@ fn game_init(
     mut ev_init: EventWriter<GameInitEvent>,
 ) {
     // Create assets
+    let thruster_particle = Particle {
+        lifetime: Duration::from_millis(1500),
+        color: materials.add(Color::srgb_u8(232, 204, 42)),
+        mesh: Mesh2dHandle(meshes.add(Cuboid::new(3.0 / SCALE, 3.0 / SCALE, 0.0))),
+        friction: 0.1,
+        collision_radius: 1.5 / SCALE,
+        collision_groups: CollisionGroups::new(Group::GROUP_13, GROUND_COLLISION_GROUP),
+    };
+
     let center_pbr = {
         let positions: Vec<[f32; 3]> = LANDER_POLY
             .iter()
@@ -455,13 +510,13 @@ fn game_init(
     for i in [-1.0, 1.0] {
         let x_distance = w / (chunks as f32 - 1.0);
 
-        commands.spawn(MaterialMesh2dBundle {
+        commands.spawn(ColorMesh2dBundle {
             transform: Transform::from_xyz(i * x_distance, helipad_y - h / 2.0, 0.0),
             mesh: flag_handle_pbr.0.clone(),
             material: flag_handle_pbr.1.clone(),
             ..Default::default()
         });
-        commands.spawn(MaterialMesh2dBundle {
+        commands.spawn(ColorMesh2dBundle {
             transform: Transform::from_xyz(i * x_distance, helipad_y - h / 2.0, 0.0),
             mesh: flag_pbr.0.clone(),
             material: flag_pbr.1.clone(),
@@ -479,7 +534,7 @@ fn game_init(
         )
         .insert(Restitution::coefficient(0.0))
         .insert(ColliderMassProperties::Density(5.0))
-        .insert(MaterialMesh2dBundle {
+        .insert(ColorMesh2dBundle {
             transform: Transform::from_xyz(center_position.x, center_position.y, 0.0),
             mesh: center_pbr.0.clone(),
             material: center_pbr.1.clone(),
@@ -516,7 +571,7 @@ fn game_init(
             )]))
             .insert(Restitution::coefficient(0.0))
             .insert(ColliderMassProperties::Density(1.0))
-            .insert(MaterialMesh2dBundle {
+            .insert(ColorMesh2dBundle {
                 transform: Transform::from_xyz(
                     center_position.x + leg_translation.x,
                     center_position.y + leg_translation.y,
@@ -545,11 +600,15 @@ fn game_init(
     }
 
     commands.spawn(Game {
+        thruster_particle,
+
         center_id,
         leg_ids: leg_ids.try_into().unwrap(),
         ground_id,
+
         helipad_y,
         wind: None,
+
         frame: 0,
         game_over: None,
     });
@@ -660,6 +719,7 @@ fn update_available_schedule(
 
 fn game_pre_update(
     mut commands: Commands,
+    mut ev_spawn_particle: EventWriter<SpawnParticleEvent>,
     mut ev_step_action: ResMut<Events<StepActionEvent>>,
     q_game: Query<&Game>,
     q_center: Query<&Transform, With<LanderCenter>>,
@@ -683,12 +743,20 @@ fn game_pre_update(
     let arbitrary_force_m = 0.1;
 
     // Apply action in simulation
-
     commands.entity(game.center_id).insert(action.to_force(
         center_transform.rotation,
         MAIN_ENGINE_POWER * arbitrary_force_m,
         SIDE_ENGINE_POWER,
     ));
+
+    // % 4 to avoid lag in debug mode
+    if game.frame % 4 == 0 {
+        if let Some(spawn_particle) =
+            action.to_spawn_particle(game.thruster_particle.clone(), *center_transform)
+        {
+            ev_spawn_particle.send(spawn_particle);
+        }
+    }
 
     commands.add(|world: &mut World| {
         world.run_schedule(PhysicsStepSchedule);

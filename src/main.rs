@@ -25,12 +25,10 @@ fn main() {
     app.add_plugins(GamePlugin::default());
 
     if human_controller {
-        app.add_systems(PostGameInitSchedule, controller_human::init_game);
         app.add_systems(PostGameResetSchedule, controller_human::game_post_reset);
         app.add_systems(AvailableUpdateSchedule, controller_human::game_pre_step);
         app.add_systems(PostGameStepSchedule, controller_human::game_post_step);
     } else {
-        app.add_systems(PostGameInitSchedule, controller_ai::init_game);
         app.add_systems(PostGameResetSchedule, controller_ai::game_post_reset);
         app.add_systems(AvailableUpdateSchedule, controller_ai::game_pre_step);
         app.add_systems(PostGameStepSchedule, controller_ai::game_post_step);

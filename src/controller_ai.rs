@@ -1,38 +1,26 @@
 use crate::game::*;
 use bevy::prelude::*;
 
-#[derive(Component)]
+#[derive(Resource)]
 pub struct GameHolder {
     state: State,
     total_points: f32,
 }
 
-pub fn init_game(mut commands: Commands, mut ev_init: ResMut<Events<GameInitEvent>>) {
-    let state = ev_init.drain().next().unwrap().initial_state;
+pub fn game_post_reset(mut commands: Commands, mut ev_reset: ResMut<Events<GameResetEvent>>) {
+    let state = ev_reset.drain().next().unwrap().initial_state;
 
-    commands.spawn(GameHolder {
+    commands.insert_resource(GameHolder {
         state,
         total_points: 0.0,
     });
 }
 
-pub fn game_post_reset(
-    mut q_holder: Query<&mut GameHolder>,
-    mut ev_reset: ResMut<Events<GameResetEvent>>,
-) {
-    let mut holder = q_holder.single_mut();
-
-    holder.state = ev_reset.drain().next().unwrap().initial_state;
-    holder.total_points = 0.0;
-}
-
 pub fn game_pre_step(
     mut commands: Commands,
-    mut q_holder: Query<&mut GameHolder>,
+    mut holder: ResMut<GameHolder>,
     mut ev_step_action: EventWriter<StepActionEvent>,
 ) {
-    let mut holder = q_holder.single_mut();
-
     // TODO: use holder.state and the model to calculate the better action
 
     Game::play_step(
@@ -44,10 +32,9 @@ pub fn game_pre_step(
 
 pub fn game_post_step(
     mut commands: Commands,
-    mut q_holder: Query<&mut GameHolder>,
+    mut holder: ResMut<GameHolder>,
     mut ev_step_result: ResMut<Events<StepResultEvent>>,
 ) {
-    let mut holder = q_holder.single_mut();
     let (next_state, reward, done) = ev_step_result.drain().next().unwrap().unpack();
 
     // TODO: train model, update buffer...

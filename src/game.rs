@@ -83,11 +83,6 @@ impl State {
 }
 
 #[derive(Event)]
-pub struct GameInitEvent {
-    pub initial_state: State,
-}
-
-#[derive(Event)]
 pub struct GameResetEvent {
     pub initial_state: State,
 }
@@ -246,9 +241,6 @@ pub struct GameUpdater {
 }
 
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
-pub struct PostGameInitSchedule;
-
-#[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 struct GameResetSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct PostGameResetSchedule;
@@ -275,8 +267,6 @@ impl Default for GamePlugin {
 }
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app.init_schedule(PostGameInitSchedule);
-
         app.init_schedule(GameResetSchedule);
         app.init_schedule(PostGameResetSchedule);
 
@@ -307,7 +297,6 @@ impl Plugin for GamePlugin {
             schedule: PostPhysicsStepSchedule,
         });
 
-        app.add_event::<GameInitEvent>();
         app.add_event::<GameResetEvent>();
         app.add_event::<StepActionEvent>();
         app.add_event::<StepResultEvent>();
@@ -402,7 +391,7 @@ fn game_init(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut ev_init: EventWriter<GameInitEvent>,
+    mut ev_init: EventWriter<GameResetEvent>,
 ) {
     let mut rng = rand::thread_rng();
 
@@ -616,7 +605,7 @@ fn game_init(
         is_finished: None,
     });
 
-    ev_init.send(GameInitEvent {
+    ev_init.send(GameResetEvent {
         initial_state: State([
             center_position.x / (VIEWPORT_W / SCALE / 2.0),
             (center_position.y - (helipad_y + LEG_DOWN / SCALE)) / (VIEWPORT_H / SCALE / 2.0),
@@ -629,7 +618,7 @@ fn game_init(
         ]),
     });
     commands.add(|world: &mut World| {
-        world.run_schedule(PostGameInitSchedule);
+        world.run_schedule(PostGameResetSchedule);
     })
 }
 

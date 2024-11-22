@@ -2,12 +2,8 @@ use crate::game::*;
 use bevy::prelude::*;
 use rand::Rng;
 
-pub fn init_game(mut ev_init: ResMut<Events<GameInitEvent>>) {
-    let _state = ev_init.drain().next().unwrap().initial_state;
-}
-
 pub fn game_post_reset(mut ev_reset: ResMut<Events<GameResetEvent>>) {
-    let _state = ev_reset.drain().next().unwrap().initial_state;
+    let _state: State = ev_reset.drain().next().unwrap().initial_state;
 }
 
 pub fn game_pre_step(

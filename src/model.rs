@@ -188,3 +188,20 @@ pub struct QTrainer {
     // Soft update parameter for the target network
     tau: f64,
 }
+
+impl QTrainer {
+    pub fn new(q_lr: f64, gamma: f32, tau: f64) -> Self {
+        let q_vs = VarStore::new(DEVICE);
+        let target_q_vs = VarStore::new(DEVICE);
+        Self {
+            q_network: DeepQNet::new(&q_vs),
+            q_optimizer: Adam::default().build(&q_vs, q_lr).unwrap(),
+            q_vs,
+
+            target_q_network: DeepQNet::new(&target_q_vs),
+            target_q_vs,
+
+            gamma,
+            tau,
+        }
+    }

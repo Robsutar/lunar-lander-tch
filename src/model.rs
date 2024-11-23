@@ -230,3 +230,31 @@ impl QTrainer {
 
         loss
     }
+
+    /// Updates the weights of the Q networks.
+    pub fn agent_learn(&mut self, experiences: &Experiences) {
+        // Calculate the loss
+        let loss = self.compute_loss(&experiences);
+
+        self.q_optimizer.zero_grad();
+        // Compute gradients of the loss with respect to the weights
+        loss.backward();
+        // Update the weights of the q_network.
+        self.q_optimizer.step();
+
+        // Update the weights of target q_network using soft update.
+        tch::no_grad(|| {
+            for (target_params, q_net_params) in self
+                .target_q_vs
+                .trainable_variables()
+                .iter_mut()
+                .zip(self.q_vs.trainable_variables().iter())
+            {
+                let new_target_params =
+                    self.tau * q_net_params.data() + (1.0 - self.tau) * target_params.data();
+
+                target_params.data().copy_(&new_target_params);
+            }
+        });
+    }
+}

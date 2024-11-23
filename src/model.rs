@@ -162,3 +162,29 @@ impl Module for DeepQNet {
             .apply(&self.output)
     }
 }
+
+/// Represents a trainer for Deep Q-Network (DQN) algorithms.
+///
+/// It utilizes two separate neural networks: the primary Q-network (q_network)
+/// and the target Q-network (target_q_network).
+///
+/// The use of two networks helps stabilize training by providing a stable
+/// target for Q-value estimates.
+pub struct QTrainer {
+    // The primary Q-network trained to estimate action-values
+    q_network: DeepQNet,
+    // Optimizer for updating the q_network's parameters
+    q_optimizer: Optimizer,
+    // Variable store holding the q_network's parameters
+    q_vs: VarStore,
+
+    // The target Q-network providing stable targets
+    target_q_network: DeepQNet,
+    // Variable store holding the target_q_network's parameters
+    target_q_vs: VarStore,
+
+    // Discount factor for future rewards
+    gamma: f32,
+    // Soft update parameter for the target network
+    tau: f64,
+}

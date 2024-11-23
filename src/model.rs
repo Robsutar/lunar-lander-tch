@@ -221,6 +221,11 @@ impl QTrainer {
         self.q_vs.save(path).unwrap();
     }
 
+    /// Uses q_network to predict values, xs should have [`State::SIZE`] values in a single dimension.
+    pub fn q_forward(&self, xs: &Tensor) -> Tensor {
+        self.q_network.forward(xs)
+    }
+
     /// Calculates the loss.
     ///
     /// # Returns

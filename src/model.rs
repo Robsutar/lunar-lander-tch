@@ -205,3 +205,28 @@ impl QTrainer {
             tau,
         }
     }
+
+    /// Calculates the loss.
+    ///
+    /// # Returns
+    /// loss: Tensor(size=[]) the Mean-Squared Error between
+    /// the y targets and the Q(s,a) values.
+    fn compute_loss(&self, experiences: &Experiences) -> Tensor {
+        // Unpack the mini-batch of experience tuples
+        let (states, actions, rewards, next_states, done_values) = experiences.unpack();
+
+        // Compute max Q^(s,a)
+        let (max_qsa, _) = self.target_q_network.forward(&next_states).max_dim(1, true);
+
+        // Set y = R if episode terminates, otherwise set y = R + γ max Q^(s,a).
+        let y_targets: Tensor = rewards + (self.gamma * max_qsa * (1.0 - done_values));
+
+        // Get the q_values
+        let q_values = self.q_network.forward(&states);
+        let q_values = q_values.gather(1, &actions.to_kind(Kind::Int64), false);
+
+        // Compute the loss
+        let loss = q_values.mse_loss(&y_targets, tch::Reduction::Mean);
+
+        loss
+    }

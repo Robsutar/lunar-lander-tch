@@ -206,6 +206,11 @@ impl QTrainer {
         }
     }
 
+    /// Copies the data from q_network to target_q_network
+    pub fn fill_q_network_in_target(&mut self) {
+        self.target_q_vs.copy(&self.q_vs).unwrap();
+    }
+
     /// Calculates the loss.
     ///
     /// # Returns

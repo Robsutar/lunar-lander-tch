@@ -1,6 +1,7 @@
 mod controller_ai;
 mod controller_human;
 mod game;
+mod model;
 mod particle;
 mod util;
 

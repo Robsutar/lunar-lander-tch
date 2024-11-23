@@ -94,3 +94,11 @@ impl Agent {
         return final_move;
     }
 
+    pub fn check_update_conditions(&self, time_step: usize) -> bool {
+        (time_step + 1) % NUM_STEPS_FOR_UPDATE == 0 && self.memory_buffer.len() > MINI_BATCH_SIZE
+    }
+
+    pub fn decay_epsilon(&mut self) {
+        self.epsilon = E_MIN.max(E_DECAY * self.epsilon);
+    }
+}

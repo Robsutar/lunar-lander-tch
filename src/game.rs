@@ -87,7 +87,7 @@ pub struct GameResetEvent {
     pub initial_state: State,
 }
 
-#[derive(Event, PartialEq, Eq)]
+#[derive(Debug, Event, PartialEq, Eq)]
 pub enum StepActionEvent {
     Nothing,
     ThrusterLeft,
@@ -95,6 +95,8 @@ pub enum StepActionEvent {
     ThrusterMain,
 }
 impl StepActionEvent {
+    pub const SIZE: usize = 4;
+
     pub fn from_index(action_index: u8) -> Self {
         match action_index {
             0 => Self::Nothing,

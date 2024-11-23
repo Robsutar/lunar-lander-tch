@@ -30,3 +30,30 @@ pub struct Agent {
     epsilon: f64,
 }
 
+impl Agent {
+    pub fn load_if_exists(file_name: &str) -> Self {
+        let mut exit = Self {
+            n_games: 0,
+            memory_buffer: FixedVecDeque::new(MEMORY_SIZE),
+            trainer: QTrainer::new(ALPHA, GAMMA, TAU),
+            epsilon: 1.0,
+        };
+
+        let file_name = Path::new("./model").join(file_name);
+        if file_name.exists() {
+            exit.trainer.load_in_q_network(file_name);
+        }
+        exit.trainer.fill_q_network_in_target();
+
+        exit
+    }
+
+    pub fn save(&self, file_name: &str) {
+        let model_folder_path = Path::new("./model");
+        if !model_folder_path.exists() {
+            std::fs::create_dir(model_folder_path).unwrap();
+        }
+
+        let file_name = model_folder_path.join(file_name);
+        self.trainer.save_q_network(file_name);
+    }

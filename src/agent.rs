@@ -57,3 +57,23 @@ impl Agent {
         let file_name = model_folder_path.join(file_name);
         self.trainer.save_q_network(file_name);
     }
+
+    pub fn append_experience(&mut self, experience: Experience) {
+        self.memory_buffer.push(experience);
+    }
+
+    pub fn get_experiences(&self) -> Experiences {
+        if self.memory_buffer.len() < MINI_BATCH_SIZE {
+            panic!("There is no sufficient experiences to fill the MINI_BATCH_SIZE");
+        }
+
+        let mut mini_sample = ExperienceConcat::building(MINI_BATCH_SIZE);
+        let mut rng = thread_rng();
+        for index in rand::seq::index::sample(&mut rng, self.memory_buffer.len(), MINI_BATCH_SIZE)
+            .into_iter()
+        {
+            mini_sample.push(&self.memory_buffer.as_deque()[index]);
+        }
+
+        Experiences::from_concat(&mini_sample)
+    }

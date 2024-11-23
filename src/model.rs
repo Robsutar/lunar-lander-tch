@@ -116,3 +116,49 @@ impl Experiences {
     }
 }
 
+/// A neural network model designed for Deep Q-Network (DQN) algorithms.
+///
+/// The network is used to approximate the Q-value function, which predicts the expected cumulative reward
+/// for taking a given action in a given state. The goal of this network is to map input states to Q-values
+/// for each possible action, guiding the agent's decision-making process.
+///
+/// The network's output corresponds to the Q-values for all actions in the action space,
+/// and during training, the network minimizes the mean squared error between the predicted Q-values and
+/// the target Q-values derived from the Bellman equation. This process helps the agent learn which actions
+/// lead to the highest long-term rewards.
+///
+/// The network is trained using experience tuples collected from the environment, with the aim of improving
+/// the agent's policy over time by learning the optimal Q-value function.
+#[derive(Debug)]
+pub struct DeepQNet {
+    /// This layer receives the input data, with the input size, and output values with next the hidden layer size.
+    input: Linear,
+    /// This layer receives the output data from the previous layer, and output values with the next layer size.
+    hidden1: Linear,
+    /// This layer receives the output data from the previous layer, and output values with the output size.
+    output: Linear,
+}
+impl DeepQNet {
+    pub fn new(vs: &VarStore) -> Self {
+        let input_size = State::SIZE as i64;
+        let output_size = StepActionEvent::SIZE as i64;
+        let input = nn::linear(&vs.root() / "input", input_size, 64, Default::default());
+        let hidden1 = nn::linear(&vs.root() / "hidden1", 64, 64, Default::default());
+        let output = nn::linear(&vs.root() / "output", 64, output_size, Default::default());
+
+        Self {
+            input,
+            hidden1,
+            output,
+        }
+    }
+}
+impl Module for DeepQNet {
+    fn forward(&self, xs: &Tensor) -> Tensor {
+        xs.apply(&self.input)
+            .relu()
+            .apply(&self.hidden1)
+            .relu()
+            .apply(&self.output)
+    }
+}

@@ -1,3 +1,4 @@
+mod agent;
 mod controller_ai;
 mod controller_human;
 mod game;

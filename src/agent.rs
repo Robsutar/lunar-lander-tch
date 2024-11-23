@@ -22,3 +22,11 @@ const TAU: f64 = 0.001;
 const E_DECAY: f64 = 0.9995;
 /// Minimum ε value for the ε-greedy policy.
 const E_MIN: f64 = 0.01;
+
+pub struct Agent {
+    n_games: usize,
+    memory_buffer: FixedVecDeque<Experience>,
+    trainer: QTrainer,
+    epsilon: f64,
+}
+

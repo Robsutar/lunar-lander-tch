@@ -44,8 +44,8 @@ pub const VIEWPORT_H: f32 = 400.0; // Height of the window
 
 pub const GROUND_COLLISION_GROUP: Group = Group::GROUP_10;
 
-#[derive(Clone)]
-pub struct State([f32; Self::SIZE]);
+#[derive(Debug, Clone)]
+pub struct State(pub [f32; Self::SIZE]);
 impl State {
     pub const SIZE: usize = 8;
 

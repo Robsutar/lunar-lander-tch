@@ -71,3 +71,48 @@ impl ExperienceConcat {
         }
     }
 }
+
+/// Experiences represented by tensors.
+pub struct Experiences {
+    states: Tensor,
+    actions: Tensor,
+    rewards: Tensor,
+    next_states: Tensor,
+    done_values: Tensor,
+}
+impl Experiences {
+    pub fn from_concat(snapshots: &ExperienceConcat) -> Self {
+        snapshots.check_built();
+
+        let len = snapshots.target_size as i64;
+        let state_view = [len, State::SIZE as i64];
+        let action_view = [len, 1];
+        let reward_view = [len, 1];
+        let done_view = [len, 1];
+
+        let states = Tensor::from_slice(&snapshots.state).view(state_view);
+        let actions = Tensor::from_slice(&snapshots.action).view(action_view);
+        let rewards = Tensor::from_slice(&snapshots.reward).view(reward_view);
+        let next_states = Tensor::from_slice(&snapshots.next_state).view(state_view);
+        let done_values = Tensor::from_slice(&snapshots.done).view(done_view);
+
+        Self {
+            states,
+            actions,
+            rewards,
+            next_states,
+            done_values,
+        }
+    }
+
+    fn unpack(&self) -> (&Tensor, &Tensor, &Tensor, &Tensor, &Tensor) {
+        (
+            &self.states,
+            &self.actions,
+            &self.rewards,
+            &self.next_states,
+            &self.done_values,
+        )
+    }
+}
+

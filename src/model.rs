@@ -206,7 +206,12 @@ impl QTrainer {
         }
     }
 
-    /// Copies the data from q_network to target_q_network
+    /// Loads data from path into q_network var store.
+    pub fn load_in_q_network<T: AsRef<std::path::Path>>(&mut self, path: T) {
+        self.q_vs.load(path).unwrap();
+    }
+
+    /// Copies the data from q_network var store to target_q_network.
     pub fn fill_q_network_in_target(&mut self) {
         self.target_q_vs.copy(&self.q_vs).unwrap();
     }

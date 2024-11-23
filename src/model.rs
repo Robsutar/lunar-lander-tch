@@ -216,6 +216,11 @@ impl QTrainer {
         self.target_q_vs.copy(&self.q_vs).unwrap();
     }
 
+    /// Saves the q_network var store in path.
+    pub fn save_q_network<T: AsRef<std::path::Path>>(&self, path: T) {
+        self.q_vs.save(path).unwrap();
+    }
+
     /// Calculates the loss.
     ///
     /// # Returns

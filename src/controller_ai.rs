@@ -1,4 +1,6 @@
-use crate::game::*;
+use std::sync::Mutex;
+
+use crate::{agent::Agent, game::*};
 use bevy::prelude::*;
 
 #[derive(Resource)]
@@ -22,16 +24,12 @@ pub fn game_post_reset(mut commands: Commands, mut ev_reset: ResMut<Events<GameR
 
 pub fn game_pre_step(
     mut commands: Commands,
-    mut holder: ResMut<GameHolder>,
+    holder: Res<GameHolder>,
     mut ev_step_action: EventWriter<StepActionEvent>,
 ) {
-    // TODO: use holder.state and the model to calculate the better action
+    let action = holder.agent.lock().unwrap().get_action(&holder.state);
 
-    Game::play_step(
-        &mut commands,
-        &mut ev_step_action,
-        StepActionEvent::ThrusterLeft,
-    );
+    Game::play_step(&mut commands, &mut ev_step_action, action);
 }
 
 pub fn game_post_step(

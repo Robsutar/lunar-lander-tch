@@ -94,7 +94,7 @@ pub fn game_post_step(
     holder.state = next_state;
     holder.total_points += reward;
 
-    if done {
+    if done || game.frame() >= MAX_NUM_TIME_STEPS {
         Game::reset(&mut commands);
     }
 }

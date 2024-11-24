@@ -1,10 +1,6 @@
 use std::sync::Mutex;
 
-use crate::{
-    agent::{self, *},
-    game::*,
-    model::*,
-};
+use crate::{agent::*, game::*, model::*};
 use bevy::prelude::*;
 
 #[derive(Resource)]

@@ -24,7 +24,6 @@ const E_DECAY: f64 = 0.9995;
 const E_MIN: f64 = 0.01;
 
 pub struct Agent {
-    n_games: usize,
     memory_buffer: FixedVecDeque<Experience>,
     trainer: QTrainer,
     epsilon: f64,
@@ -33,7 +32,6 @@ pub struct Agent {
 impl Agent {
     pub fn load_if_exists(file_name: &str) -> Self {
         let mut exit = Self {
-            n_games: 0,
             memory_buffer: FixedVecDeque::new(MEMORY_SIZE),
             trainer: QTrainer::new(ALPHA, GAMMA, TAU),
             epsilon: 1.0,

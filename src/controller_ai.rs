@@ -1,6 +1,10 @@
 use std::sync::Mutex;
 
-use crate::{agent::*, game::*, model::*};
+use crate::{
+    agent::{self, *},
+    game::*,
+    model::*,
+};
 use bevy::prelude::*;
 
 #[derive(Resource)]
@@ -10,6 +14,11 @@ pub struct GameHolder {
     total_points: f32,
 
     agent: Mutex<Agent>,
+}
+impl GameHolder {
+    fn agent(&self) -> std::sync::MutexGuard<'_, Agent> {
+        self.agent.lock().unwrap()
+    }
 }
 
 pub fn game_post_reset(mut commands: Commands, mut ev_reset: ResMut<Events<GameResetEvent>>) {
@@ -30,7 +39,7 @@ pub fn game_pre_step(
     mut ev_step_action: EventWriter<Action>,
 ) {
     // From the current state S choose an action A using an ε-greedy policy
-    let action = holder.agent.lock().unwrap().get_action(&holder.state);
+    let action = holder.agent().get_action(&holder.state);
     holder.action = action.clone();
 
     Game::play_step(&mut commands, &mut ev_step_action, action);
@@ -40,11 +49,16 @@ pub fn game_post_step(
     mut commands: Commands,
     mut holder: ResMut<GameHolder>,
     mut ev_step_result: ResMut<Events<StepResultEvent>>,
+    q_game: Query<&Game>,
 ) {
+    let game = q_game.single();
+
     // Take action A and receive reward R and the next state S'
     let (next_state, reward, done) = ev_step_result.drain().next().unwrap().unpack();
 
-    holder.agent.lock().unwrap().append_experience(Experience {
+    // Store experience tuple (S,A,R,S') in the memory buffer.
+    // We store the done variable as well for convenience.
+    holder.agent().append_experience(Experience {
         state: holder.state.clone(),
         action: holder.action.clone(),
         reward,

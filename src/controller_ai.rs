@@ -5,6 +5,8 @@ use bevy::prelude::*;
 pub struct GameHolder {
     state: State,
     total_points: f32,
+
+    agent: Mutex<Agent>,
 }
 
 pub fn game_post_reset(mut commands: Commands, mut ev_reset: ResMut<Events<GameResetEvent>>) {
@@ -13,6 +15,8 @@ pub fn game_post_reset(mut commands: Commands, mut ev_reset: ResMut<Events<GameR
     commands.insert_resource(GameHolder {
         state,
         total_points: 0.0,
+
+        agent: Mutex::new(Agent::load_if_exists("model.ot")),
     });
 }
 

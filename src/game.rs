@@ -87,7 +87,7 @@ pub struct GameResetEvent {
     pub initial_state: State,
 }
 
-#[derive(Debug, Event, PartialEq, Eq)]
+#[derive(Debug, Event, PartialEq, Eq, Clone)]
 pub enum StepActionEvent {
     Nothing,
     ThrusterLeft,

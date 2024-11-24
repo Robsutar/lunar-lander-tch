@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use crate::{agent::Agent, game::*};
+use crate::{agent::*, game::*, model::*};
 use bevy::prelude::*;
 
 #[derive(Resource)]
@@ -41,11 +41,18 @@ pub fn game_post_step(
     mut holder: ResMut<GameHolder>,
     mut ev_step_result: ResMut<Events<StepResultEvent>>,
 ) {
+    // Take action A and receive reward R and the next state S'
     let (next_state, reward, done) = ev_step_result.drain().next().unwrap().unpack();
 
-    // TODO: train model, update buffer...
+    holder.agent.lock().unwrap().append_experience(Experience {
+        state: holder.state.clone(),
+        action: holder.action.clone(),
+        reward,
+        next_state: next_state.clone(),
+        done,
+    });
 
-    holder.state = next_state.clone();
+    holder.state = next_state;
     holder.total_points += reward;
 
     if done {

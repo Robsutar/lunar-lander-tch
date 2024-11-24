@@ -88,13 +88,13 @@ pub struct GameResetEvent {
 }
 
 #[derive(Debug, Event, PartialEq, Eq, Clone)]
-pub enum StepActionEvent {
+pub enum Action {
     Nothing,
     ThrusterLeft,
     ThrusterRight,
     ThrusterMain,
 }
-impl StepActionEvent {
+impl Action {
     pub const SIZE: usize = 4;
 
     pub fn from_index(action_index: u8) -> Self {
@@ -123,16 +123,16 @@ impl StepActionEvent {
         side_engine_power: f32,
     ) -> Option<ExternalImpulse> {
         match self {
-            StepActionEvent::Nothing => None,
-            StepActionEvent::ThrusterLeft => Some(ExternalImpulse {
+            Action::Nothing => None,
+            Action::ThrusterLeft => Some(ExternalImpulse {
                 impulse: (center_rotation * Vec3::new(side_engine_power, 0.0, 0.0)).truncate(),
                 torque_impulse: 0.0,
             }),
-            StepActionEvent::ThrusterRight => Some(ExternalImpulse {
+            Action::ThrusterRight => Some(ExternalImpulse {
                 impulse: (center_rotation * Vec3::new(-side_engine_power, 0.0, 0.0)).truncate(),
                 torque_impulse: 0.0,
             }),
-            StepActionEvent::ThrusterMain => Some(ExternalImpulse {
+            Action::ThrusterMain => Some(ExternalImpulse {
                 impulse: (center_rotation * Vec3::new(0.0, main_engine_power, 0.0)).truncate(),
                 torque_impulse: 0.0,
             }),
@@ -144,21 +144,21 @@ impl StepActionEvent {
         thruster_particle: Particle,
         mut center_transform: Transform,
     ) -> Option<SpawnParticleEvent> {
-        if *self == StepActionEvent::Nothing {
+        if *self == Action::Nothing {
             return None;
         }
 
         let (translation, speed) = match self {
-            StepActionEvent::Nothing => panic!(),
-            StepActionEvent::ThrusterLeft => (
+            Action::Nothing => panic!(),
+            Action::ThrusterLeft => (
                 Vec2::new(-SIDE_ENGINE_AWAY / SCALE, 0.0),
                 Vec2::new(SIDE_ENGINE_POWER * 300.0 / SCALE, 0.0),
             ),
-            StepActionEvent::ThrusterRight => (
+            Action::ThrusterRight => (
                 Vec2::new(SIDE_ENGINE_AWAY / SCALE, 0.0),
                 Vec2::new(-SIDE_ENGINE_POWER * 300.0 / SCALE, 0.0),
             ),
-            StepActionEvent::ThrusterMain => (
+            Action::ThrusterMain => (
                 Vec2::new(0.0, -SIDE_ENGINE_HEIGHT / SCALE),
                 Vec2::new(0.0, -MAIN_ENGINE_POWER * 300.0 / SCALE),
             ),
@@ -202,7 +202,7 @@ pub enum LegState {
 
 enum PostUpdateCall {
     GameReset,
-    GameStep(StepActionEvent),
+    GameStep(Action),
 }
 
 #[derive(Component)]
@@ -229,8 +229,8 @@ impl Game {
 
     pub fn play_step(
         commands: &mut Commands,
-        ev_step_action: &mut EventWriter<StepActionEvent>,
-        action: StepActionEvent,
+        ev_step_action: &mut EventWriter<Action>,
+        action: Action,
     ) {
         ev_step_action.send(action);
         commands.add(|world: &mut World| {
@@ -305,7 +305,7 @@ impl Plugin for GamePlugin {
         });
 
         app.add_event::<GameResetEvent>();
-        app.add_event::<StepActionEvent>();
+        app.add_event::<Action>();
         app.add_event::<StepResultEvent>();
 
         app.add_systems(PostStartup, game_init);
@@ -705,7 +705,7 @@ fn update_available_schedule(
 fn game_pre_update(
     mut commands: Commands,
     mut ev_spawn_particle: EventWriter<SpawnParticleEvent>,
-    mut ev_step_action: ResMut<Events<StepActionEvent>>,
+    mut ev_step_action: ResMut<Events<Action>>,
     mut q_game: Query<&mut Game>,
     q_center: Query<&Transform, With<LanderCenter>>,
     mut ev_step_result: EventWriter<StepResultEvent>,
@@ -862,10 +862,10 @@ fn game_post_physics_update(
 
                     let reward = {
                         let (m_power, s_power) = match action {
-                            StepActionEvent::Nothing => (0.0, 0.0),
-                            StepActionEvent::ThrusterLeft => (0.0, 1.0),
-                            StepActionEvent::ThrusterRight => (0.0, 1.0),
-                            StepActionEvent::ThrusterMain => (1.0, 0.0),
+                            Action::Nothing => (0.0, 0.0),
+                            Action::ThrusterLeft => (0.0, 1.0),
+                            Action::ThrusterRight => (0.0, 1.0),
+                            Action::ThrusterMain => (1.0, 0.0),
                         };
 
                         let fuel_penalty = m_power * 0.30 + s_power * 0.03;

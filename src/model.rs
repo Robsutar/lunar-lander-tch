@@ -1,7 +1,7 @@
 use tch::nn::{self, Adam, Linear, Module, Optimizer, OptimizerConfig, VarStore};
 use tch::{Device, Kind, Tensor};
 
-use crate::{State, StepActionEvent};
+use crate::{Action, State};
 
 const DEVICE: Device = Device::Cpu;
 type DType = f32;
@@ -17,7 +17,7 @@ pub struct Experience {
     /// The state 𝑆𝑡 before the action is taken.
     pub state: State,
     /// The action 𝐴𝑡 performed by the agent.
-    pub action: StepActionEvent,
+    pub action: Action,
     /// The reward 𝑅𝑡 received after taking the action.
     pub reward: DType,
     /// The resulting state 𝑆𝑡+1 after the action is applied.
@@ -38,7 +38,7 @@ impl ExperienceConcat {
     pub fn building(target_size: usize) -> Self {
         Self {
             state: Vec::with_capacity(target_size * State::SIZE),
-            action: Vec::with_capacity(target_size * StepActionEvent::SIZE),
+            action: Vec::with_capacity(target_size * Action::SIZE),
             reward: Vec::with_capacity(target_size),
             next_state: Vec::with_capacity(target_size * State::SIZE),
             done: Vec::with_capacity(target_size),
@@ -141,7 +141,7 @@ pub struct DeepQNet {
 impl DeepQNet {
     pub fn new(vs: &VarStore) -> Self {
         let input_size = State::SIZE as i64;
-        let output_size = StepActionEvent::SIZE as i64;
+        let output_size = Action::SIZE as i64;
         let input = nn::linear(&vs.root() / "input", input_size, 64, Default::default());
         let hidden1 = nn::linear(&vs.root() / "hidden1", 64, 64, Default::default());
         let output = nn::linear(&vs.root() / "output", 64, output_size, Default::default());

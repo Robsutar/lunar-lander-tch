@@ -3,7 +3,7 @@ use std::path::Path;
 use rand::{thread_rng, Rng};
 use tch::Tensor;
 
-use crate::{model::*, util::FixedVecDeque, State, StepActionEvent};
+use crate::{model::*, util::FixedVecDeque, Action, State};
 
 /// Size of memory buffer.
 const MEMORY_SIZE: usize = 100_000;
@@ -78,17 +78,17 @@ impl Agent {
         Experiences::from_concat(&mini_sample)
     }
 
-    pub fn get_action(&self, state: &State) -> StepActionEvent {
+    pub fn get_action(&self, state: &State) -> Action {
         let mut rng = thread_rng();
 
         let final_move = if rng.gen_range(0.0..1.0) > self.epsilon {
             let state = Tensor::from_slice(&state.0);
             let prediction = self.trainer.q_forward(&state);
             let target_move = prediction.argmax(0, false).int64_value(&[]);
-            StepActionEvent::from_index(target_move as u8)
+            Action::from_index(target_move as u8)
         } else {
-            let target_move = rng.gen_range(0..StepActionEvent::SIZE);
-            StepActionEvent::from_index(target_move as u8)
+            let target_move = rng.gen_range(0..Action::SIZE);
+            Action::from_index(target_move as u8)
         };
 
         return final_move;

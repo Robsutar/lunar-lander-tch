@@ -5,7 +5,7 @@ use bevy::prelude::*;
 
 #[derive(Resource)]
 pub struct GameHolder {
-    action: StepActionEvent,
+    action: Action,
     state: State,
     total_points: f32,
 
@@ -16,7 +16,7 @@ pub fn game_post_reset(mut commands: Commands, mut ev_reset: ResMut<Events<GameR
     let state = ev_reset.drain().next().unwrap().initial_state;
 
     commands.insert_resource(GameHolder {
-        action: StepActionEvent::Nothing,
+        action: Action::Nothing,
         state,
         total_points: 0.0,
 
@@ -27,7 +27,7 @@ pub fn game_post_reset(mut commands: Commands, mut ev_reset: ResMut<Events<GameR
 pub fn game_pre_step(
     mut commands: Commands,
     mut holder: ResMut<GameHolder>,
-    mut ev_step_action: EventWriter<StepActionEvent>,
+    mut ev_step_action: EventWriter<Action>,
 ) {
     // From the current state S choose an action A using an ε-greedy policy
     let action = holder.agent.lock().unwrap().get_action(&holder.state);

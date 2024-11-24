@@ -8,18 +8,18 @@ pub fn game_post_reset(mut ev_reset: ResMut<Events<GameResetEvent>>) {
 
 pub fn game_pre_step(
     mut commands: Commands,
-    mut ev_step_action: EventWriter<StepActionEvent>,
+    mut ev_step_action: EventWriter<Action>,
     keys: Res<ButtonInput<KeyCode>>,
 ) {
     let mut possible_actions = Vec::new();
     if keys.pressed(KeyCode::ArrowLeft) {
-        possible_actions.push(StepActionEvent::ThrusterRight);
+        possible_actions.push(Action::ThrusterRight);
     }
     if keys.pressed(KeyCode::ArrowRight) {
-        possible_actions.push(StepActionEvent::ThrusterLeft);
+        possible_actions.push(Action::ThrusterLeft);
     }
     if keys.pressed(KeyCode::Space) {
-        possible_actions.push(StepActionEvent::ThrusterMain);
+        possible_actions.push(Action::ThrusterMain);
     }
 
     let action = {
@@ -29,7 +29,7 @@ pub fn game_pre_step(
 
             possible_actions.remove(i)
         } else {
-            StepActionEvent::Nothing
+            Action::Nothing
         }
     };
 

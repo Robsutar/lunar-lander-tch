@@ -32,6 +32,9 @@ pub fn game_post_reset(
         Some(mut holder) => {
             holder.action = Action::Nothing;
             holder.state = state;
+
+            // Update the ε value
+            holder.agent().decay_epsilon();
         }
         None => {
             commands.insert_resource(GameHolder {

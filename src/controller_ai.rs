@@ -21,16 +21,28 @@ impl GameHolder {
     }
 }
 
-pub fn game_post_reset(mut commands: Commands, mut ev_reset: ResMut<Events<GameResetEvent>>) {
+pub fn game_post_reset(
+    mut commands: Commands,
+    holder: Option<ResMut<GameHolder>>,
+    mut ev_reset: ResMut<Events<GameResetEvent>>,
+) {
     let state = ev_reset.drain().next().unwrap().initial_state;
 
-    commands.insert_resource(GameHolder {
-        action: Action::Nothing,
-        state,
-        total_points: 0.0,
+    match holder {
+        Some(mut holder) => {
+            holder.action = Action::Nothing;
+            holder.state = state;
+        }
+        None => {
+            commands.insert_resource(GameHolder {
+                action: Action::Nothing,
+                state,
+                total_points: 0.0,
 
-        agent: Mutex::new(Agent::load_if_exists("model.ot")),
-    });
+                agent: Mutex::new(Agent::load_if_exists("model.ot")),
+            });
+        }
+    }
 }
 
 pub fn game_pre_step(

@@ -237,6 +237,10 @@ impl Game {
             world.run_schedule(PreGameStepSchedule);
         })
     }
+
+    pub fn frame(&self) -> usize {
+        self.frame
+    }
 }
 
 #[derive(Resource)]

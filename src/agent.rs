@@ -101,4 +101,8 @@ impl Agent {
     pub fn decay_epsilon(&mut self) {
         self.epsilon = E_MIN.max(E_DECAY * self.epsilon);
     }
+
+    pub fn learn(&mut self, experiences: &Experiences) {
+        self.trainer.agent_learn(experiences);
+    }
 }

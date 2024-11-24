@@ -12,7 +12,7 @@ use game::*;
 pub const WINDOW_ZOOM: f32 = 2.0; // Affects only visually the scale of the window, adding zoom to camera.
 
 fn main() {
-    let human_controller = true;
+    let human_controller = false;
 
     let mut app = App::default();
     app.insert_resource(ClearColor(Color::BLACK));

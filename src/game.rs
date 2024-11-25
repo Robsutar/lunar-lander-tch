@@ -17,8 +17,8 @@ use crate::{particle::*, util::*};
 pub const FPS: f32 = 50.0;
 pub const SCALE: f32 = 30.0; // Affects how fast-paced the game is, forces should be adjusted as well
 
-pub const MAIN_ENGINE_POWER: f32 = 13.0 * 0.1; // 0.1 is an arbitrary value to make rapier2d accord to box2d
-pub const SIDE_ENGINE_POWER: f32 = 0.6;
+pub const MAIN_ENGINE_POWER: f32 = 13.0 * 0.125; // 0.125 is an arbitrary value to make rapier2d accord to box2d
+pub const SIDE_ENGINE_POWER: f32 = 0.6 * 0.4; // 0.4 is an arbitrary value to make rapier2d accord to box2d
 
 pub const INITIAL_RANDOM: f32 = 1000.0 * 0.02; // Set 1500 to make game harder, 0.02 is an arbitrary value to make rapier2d accord to box2d
 

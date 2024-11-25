@@ -116,26 +116,49 @@ impl Action {
         }
     }
 
-    pub fn to_force(
+    pub fn to_direction_and_position(
         &self,
-        center_rotation: Quat,
-        main_engine_power: f32,
-        side_engine_power: f32,
-    ) -> Option<ExternalImpulse> {
-        match self {
-            Action::Nothing => None,
-            Action::ThrusterLeft => Some(ExternalImpulse {
-                impulse: (center_rotation * Vec3::new(side_engine_power, 0.0, 0.0)).truncate(),
-                torque_impulse: 0.0,
-            }),
-            Action::ThrusterRight => Some(ExternalImpulse {
-                impulse: (center_rotation * Vec3::new(-side_engine_power, 0.0, 0.0)).truncate(),
-                torque_impulse: 0.0,
-            }),
-            Action::ThrusterMain => Some(ExternalImpulse {
-                impulse: (center_rotation * Vec3::new(0.0, main_engine_power, 0.0)).truncate(),
-                torque_impulse: 0.0,
-            }),
+        center_transform: Transform,
+        main_engine_length: f32,
+        side_engine_length: f32,
+    ) -> Option<(Vec2, Vec2)> {
+        if *self == Action::Nothing {
+            return None;
+        }
+
+        let (mut impulse, mut position) = match self {
+            Action::Nothing => panic!(),
+            Action::ThrusterLeft => (
+                Vec2::new(side_engine_length, 0.0),
+                Vec2::new(-SIDE_ENGINE_AWAY / SCALE, SIDE_ENGINE_HEIGHT / SCALE),
+            ),
+            Action::ThrusterRight => (
+                Vec2::new(-side_engine_length, 0.0),
+                Vec2::new(SIDE_ENGINE_AWAY / SCALE, SIDE_ENGINE_HEIGHT / SCALE),
+            ),
+            Action::ThrusterMain => (
+                Vec2::new(0.0, main_engine_length),
+                Vec2::new(0.0, -SIDE_ENGINE_HEIGHT / SCALE),
+            ),
+        };
+        impulse = (center_transform.rotation * impulse.extend(0.0)).truncate();
+        position = (center_transform.rotation * position.extend(0.0)).truncate();
+
+        Some((impulse, position))
+    }
+
+    pub fn to_impulse(&self, center_transform: Transform) -> Option<ExternalImpulse> {
+        match self.to_direction_and_position(center_transform, MAIN_ENGINE_POWER, SIDE_ENGINE_POWER)
+        {
+            Some((impulse, position)) => {
+                let torque_impulse = position.perp_dot(impulse);
+
+                Some(ExternalImpulse {
+                    impulse,
+                    torque_impulse,
+                })
+            }
+            None => None,
         }
     }
 
@@ -144,35 +167,22 @@ impl Action {
         thruster_particle: Particle,
         mut center_transform: Transform,
     ) -> Option<SpawnParticleEvent> {
-        if *self == Action::Nothing {
-            return None;
+        match self.to_direction_and_position(
+            center_transform,
+            MAIN_ENGINE_POWER * 10.0,
+            SIDE_ENGINE_POWER * 10.0,
+        ) {
+            Some((speed, position)) => {
+                center_transform.translation += position.extend(0.0);
+
+                Some(SpawnParticleEvent {
+                    particle: thruster_particle,
+                    initial_transform: center_transform,
+                    initial_velocity: speed * -1.0,
+                })
+            }
+            None => None,
         }
-
-        let (translation, speed) = match self {
-            Action::Nothing => panic!(),
-            Action::ThrusterLeft => (
-                Vec2::new(-SIDE_ENGINE_AWAY / SCALE, 0.0),
-                Vec2::new(SIDE_ENGINE_POWER * 300.0 / SCALE, 0.0),
-            ),
-            Action::ThrusterRight => (
-                Vec2::new(SIDE_ENGINE_AWAY / SCALE, 0.0),
-                Vec2::new(-SIDE_ENGINE_POWER * 300.0 / SCALE, 0.0),
-            ),
-            Action::ThrusterMain => (
-                Vec2::new(0.0, -SIDE_ENGINE_HEIGHT / SCALE),
-                Vec2::new(0.0, -MAIN_ENGINE_POWER * 300.0 / SCALE),
-            ),
-        };
-
-        center_transform.translation +=
-            center_transform.rotation * Vec3::new(translation.x, translation.y, 0.0);
-
-        Some(SpawnParticleEvent {
-            particle: thruster_particle,
-            initial_transform: center_transform,
-            initial_velocity: (center_transform.rotation * Vec3::new(-speed.x, speed.y, 0.0))
-                .truncate(),
-        })
     }
 }
 
@@ -729,11 +739,7 @@ fn game_pre_update(
     }
 
     // Apply action in simulation
-    if let Some(force) = action.to_force(
-        center_transform.rotation,
-        MAIN_ENGINE_POWER,
-        SIDE_ENGINE_POWER,
-    ) {
+    if let Some(force) = action.to_impulse(*center_transform) {
         commands.entity(game.center_id).insert(force);
     }
     // % 4 to avoid lag in debug mode

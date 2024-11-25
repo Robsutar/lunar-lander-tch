@@ -4,6 +4,7 @@ use bevy_egui::{
     egui::{self},
     EguiContexts, EguiPlugin,
 };
+use egui_plot::{AxisHints, Legend, Line, Plot, PlotPoints};
 
 struct GameGraph {
     state: State,
@@ -59,8 +60,8 @@ fn game_post_reset(
             let past_game = std::mem::replace(
                 &mut graph.actual_game,
                 GameGraph {
-                state,
-                total_points: 0.0,
+                    state,
+                    total_points: 0.0,
                 },
             );
 
@@ -114,4 +115,22 @@ fn ui_update(graph: Res<Graph>, mut egui_context: EguiContexts) {
                 state.is_right_leg_contact()
             ));
         });
+
+    egui::Window::new("Game History").show(egui_context.ctx_mut(), |ui| {
+        Plot::new("total_points")
+            .show_background(false)
+            .show_grid(false)
+            .allow_zoom(false)
+            .allow_drag(false)
+            .allow_scroll(false)
+            .show_x(false)
+            .show_y(false)
+            .legend(Legend::default().position(egui_plot::Corner::LeftTop))
+            .custom_x_axes(vec![AxisHints::new_x().label("Number of Games")])
+            .show(ui, |plot_ui| {
+                if graph.done_games.is_empty() {
+                    return;
+                }
+            });
+    });
 }

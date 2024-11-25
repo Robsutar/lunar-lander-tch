@@ -116,7 +116,7 @@ impl Action {
         }
     }
 
-    pub fn to_direction_and_position(
+    pub fn to_rand_direction_and_position(
         &self,
         center_transform: Transform,
         main_engine_length: f32,
@@ -126,30 +126,39 @@ impl Action {
             return None;
         }
 
-        let (mut impulse, mut position) = match self {
+        let (direction, position, angle) = match self {
             Action::Nothing => panic!(),
             Action::ThrusterLeft => (
                 Vec2::new(side_engine_length, 0.0),
                 Vec2::new(-SIDE_ENGINE_AWAY / SCALE, SIDE_ENGINE_HEIGHT / SCALE),
+                10f32,
             ),
             Action::ThrusterRight => (
                 Vec2::new(-side_engine_length, 0.0),
                 Vec2::new(SIDE_ENGINE_AWAY / SCALE, SIDE_ENGINE_HEIGHT / SCALE),
+                10f32,
             ),
             Action::ThrusterMain => (
                 Vec2::new(0.0, main_engine_length),
                 Vec2::new(0.0, -SIDE_ENGINE_HEIGHT / SCALE),
+                30f32,
             ),
         };
-        impulse = (center_transform.rotation * impulse.extend(0.0)).truncate();
-        position = (center_transform.rotation * position.extend(0.0)).truncate();
+        let random_angle =
+            Quat::from_rotation_z(rand::thread_rng().gen_range(-angle..angle).to_radians());
 
-        Some((impulse, position))
+        let direction = (center_transform.rotation * random_angle) * direction.extend(0.0);
+        let position = (center_transform.rotation * random_angle) * position.extend(0.0);
+
+        Some((direction.truncate(), position.truncate()))
     }
 
     pub fn to_impulse(&self, center_transform: Transform) -> Option<ExternalImpulse> {
-        match self.to_direction_and_position(center_transform, MAIN_ENGINE_POWER, SIDE_ENGINE_POWER)
-        {
+        match self.to_rand_direction_and_position(
+            center_transform,
+            MAIN_ENGINE_POWER,
+            SIDE_ENGINE_POWER,
+        ) {
             Some((impulse, position)) => {
                 let torque_impulse = position.perp_dot(impulse);
 
@@ -167,23 +176,14 @@ impl Action {
         thruster_particle: Particle,
         mut center_transform: Transform,
     ) -> Option<SpawnParticleEvent> {
-        match self.to_direction_and_position(center_transform, 15.0, 10.0) {
+        match self.to_rand_direction_and_position(center_transform, 15.0, 10.0) {
             Some((speed, position)) => {
                 center_transform.translation += position.extend(0.0);
-
-                let angle = if *self == Action::ThrusterMain {
-                    30f32
-                } else {
-                    10f32
-                };
-
-                let speed_angle =
-                    Quat::from_rotation_z(rand::thread_rng().gen_range(-angle..angle).to_radians());
 
                 Some(SpawnParticleEvent {
                     particle: thruster_particle,
                     initial_transform: center_transform,
-                    initial_velocity: (speed_angle * (speed * -1.0).extend(0.0)).truncate(),
+                    initial_velocity: speed * -1.0,
                 })
             }
             None => None,

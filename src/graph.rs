@@ -13,7 +13,7 @@ struct GameGraph {
 
 #[derive(Resource)]
 struct Graph {
-    num_games: usize,
+    done_games: Vec<GameGraph>,
 
     actual_game: GameGraph,
 }
@@ -56,16 +56,20 @@ fn game_post_reset(
 
     match graph {
         Some(mut graph) => {
-            graph.num_games += 1;
-
-            graph.actual_game = GameGraph {
+            let past_game = std::mem::replace(
+                &mut graph.actual_game,
+                GameGraph {
                 state,
                 total_points: 0.0,
-            };
+                },
+            );
+
+            graph.done_games.push(past_game);
         }
         None => {
             commands.insert_resource(Graph {
-                num_games: 0,
+                done_games: Vec::new(),
+
                 actual_game: GameGraph {
                     state,
                     total_points: 0.0,

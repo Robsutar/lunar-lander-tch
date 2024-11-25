@@ -565,7 +565,7 @@ fn game_init(
         Vec2::new(LEG_W / SCALE, 0.0),                   // Right Upper
     ])
     .unwrap();
-    let leg_angle = 15f32.to_radians();
+    let leg_angle = 0.4;
 
     // Create left and right legs.
     let mut leg_ids = Vec::new();
@@ -573,9 +573,9 @@ fn game_init(
         let leg_translation = Vec2::new(i * LEG_AWAY / SCALE, 0.0);
 
         let joint_limits = if i == -1.0 {
-            [-leg_angle * 5.0, 0.0]
+            [-0.9 - leg_angle, 0.0]
         } else {
-            [0.0, leg_angle * 5.0]
+            [0.0, 0.9 + leg_angle]
         };
 
         let leg_id = commands

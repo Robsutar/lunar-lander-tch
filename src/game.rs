@@ -167,18 +167,23 @@ impl Action {
         thruster_particle: Particle,
         mut center_transform: Transform,
     ) -> Option<SpawnParticleEvent> {
-        match self.to_direction_and_position(
-            center_transform,
-            MAIN_ENGINE_POWER * 10.0,
-            SIDE_ENGINE_POWER * 10.0,
-        ) {
+        match self.to_direction_and_position(center_transform, 15.0, 10.0) {
             Some((speed, position)) => {
                 center_transform.translation += position.extend(0.0);
+
+                let angle = if *self == Action::ThrusterMain {
+                    30f32
+                } else {
+                    10f32
+                };
+
+                let speed_angle =
+                    Quat::from_rotation_z(rand::thread_rng().gen_range(-angle..angle).to_radians());
 
                 Some(SpawnParticleEvent {
                     particle: thruster_particle,
                     initial_transform: center_transform,
-                    initial_velocity: speed * -1.0,
+                    initial_velocity: (speed_angle * (speed * -1.0).extend(0.0)).truncate(),
                 })
             }
             None => None,
@@ -422,7 +427,7 @@ fn game_init(
 
     // Create assets
     let thruster_particle = Particle {
-        lifetime: Duration::from_millis(1500),
+        lifetime: Duration::from_millis(250),
         color: materials.add(Color::srgb_u8(232, 204, 42)),
         mesh: Mesh2dHandle(meshes.add(Cuboid::new(3.0 / SCALE, 3.0 / SCALE, 0.0))),
         friction: 0.1,
@@ -742,13 +747,10 @@ fn game_pre_update(
     if let Some(force) = action.to_impulse(*center_transform) {
         commands.entity(game.center_id).insert(force);
     }
-    // % 4 to avoid lag in debug mode
-    if game.frame % 4 == 0 {
-        if let Some(spawn_particle) =
-            action.to_spawn_particle(game.thruster_particle.clone(), *center_transform)
-        {
-            ev_spawn_particle.send(spawn_particle);
-        }
+    if let Some(spawn_particle) =
+        action.to_spawn_particle(game.thruster_particle.clone(), *center_transform)
+    {
+        ev_spawn_particle.send(spawn_particle);
     }
 
     game.next_post_update_call = PostUpdateCall::GameStep(action);

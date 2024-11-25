@@ -765,13 +765,12 @@ fn game_post_physics_update(
     mut commands: Commands,
     rapier_context: Res<RapierContext>,
     mut q_game: Query<&mut Game>,
-    q_center: Query<(&Transform, &Velocity, &RapierRigidBodyHandle), With<LanderCenter>>,
+    q_center: Query<(&Transform, &Velocity), With<LanderCenter>>,
     mut ev_reset: EventWriter<GameResetEvent>,
     mut ev_step: EventWriter<StepResultEvent>,
 ) {
     let mut game = q_game.single_mut();
-    let (center_transform, center_velocity, center_body_handle) =
-        q_center.get(game.center_id).unwrap();
+    let (center_transform, center_velocity) = q_center.get(game.center_id).unwrap();
 
     // Read state after actions applied
     let mut leg_states = [LegState::InAir; 2];
@@ -845,11 +844,11 @@ fn game_post_physics_update(
                         })
                 {
                     (-100.0, true)
-                } else if rapier_context
-                    .bodies
-                    .get(center_body_handle.0)
-                    .unwrap()
-                    .is_sleeping()
+                } else if next_state.is_left_leg_contact()
+                    && next_state.is_right_leg_contact()
+                    && next_state.velocity_x().abs() < 0.0005
+                    && next_state.velocity_y().abs() < 0.0005
+                    && next_state.angular_velocity().abs() < 0.01
                 {
                     (100.0, true)
                 } else if next_state.position_x() > 1.0

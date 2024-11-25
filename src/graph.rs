@@ -1,3 +1,5 @@
+use crate::controller_ai;
+use crate::controller_human;
 use crate::game::*;
 use bevy::prelude::*;
 
@@ -5,9 +7,24 @@ pub struct GraphPlugin;
 
 impl Plugin for GraphPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PostGameResetSchedule, game_post_reset);
-        app.add_systems(AvailableUpdateSchedule, game_pre_step);
-        app.add_systems(PostGameStepSchedule, game_post_step);
+        app.add_systems(
+            PostGameResetSchedule,
+            game_post_reset
+                .before(controller_ai::game_post_reset)
+                .before(controller_human::game_post_reset),
+        );
+        app.add_systems(
+            AvailableUpdateSchedule,
+            game_pre_step
+                .before(controller_ai::game_pre_step)
+                .before(controller_human::game_pre_step),
+        );
+        app.add_systems(
+            PostGameStepSchedule,
+            game_post_step
+                .before(controller_ai::game_post_step)
+                .before(controller_human::game_post_step),
+        );
     }
 }
 

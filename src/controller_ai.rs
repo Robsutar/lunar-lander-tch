@@ -9,7 +9,6 @@ const MAX_NUM_TIME_STEPS: usize = 1000;
 pub struct GameHolder {
     action: Action,
     state: State,
-    total_points: f32,
 
     agent: Mutex<Agent>,
 }
@@ -38,7 +37,6 @@ pub fn game_post_reset(
             commands.insert_resource(GameHolder {
                 action: Action::Nothing,
                 state,
-                total_points: 0.0,
 
                 agent: Mutex::new(Agent::load_if_exists("model.ot")),
             });
@@ -92,7 +90,6 @@ pub fn game_post_step(
     }
 
     holder.state = next_state;
-    holder.total_points += reward;
 
     if done || game.frame() >= MAX_NUM_TIME_STEPS {
         Game::reset(&mut commands);

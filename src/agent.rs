@@ -19,7 +19,7 @@ const MINI_BATCH_SIZE: usize = 64;
 /// Soft update parameter.
 const TAU: f64 = 0.001;
 /// ε-decay rate for the ε-greedy policy.
-const E_DECAY: f64 = 0.9995;
+const E_DECAY: f64 = 0.995;
 /// Minimum ε value for the ε-greedy policy.
 const E_MIN: f64 = 0.01;
 

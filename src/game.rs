@@ -568,9 +568,9 @@ fn game_init(
         let leg_translation = Vec2::new(i * LEG_AWAY / SCALE, 0.0);
 
         let joint_limits = if i == -1.0 {
-            [-leg_angle * 2.0, 0.0]
+            [-leg_angle * 5.0, 0.0]
         } else {
-            [0.0, leg_angle * 2.0]
+            [0.0, leg_angle * 5.0]
         };
 
         let leg_id = commands

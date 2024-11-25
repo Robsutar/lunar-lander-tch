@@ -10,7 +10,7 @@ struct GameGraph {
     state: State,
 
     total_points: f32,
-    frames: usize,
+    frame: usize,
 }
 
 #[derive(Resource)]
@@ -59,7 +59,7 @@ fn game_post_reset(
     let new_game_graph = GameGraph {
         state,
         total_points: 0.0,
-        frames: 0,
+        frame: 0,
     };
 
     match graph {
@@ -81,12 +81,12 @@ fn game_post_reset(
 fn game_pre_step() {}
 
 fn game_post_step(mut graph: ResMut<Graph>, mut ev_step_result: EventReader<StepResultEvent>) {
-    let (next_state, reward, done) = ev_step_result.read().next().unwrap().clone().unpack();
+    let (next_state, reward, _done) = ev_step_result.read().next().unwrap().clone().unpack();
 
     graph.actual_game.state = next_state;
 
     graph.actual_game.total_points += reward;
-    graph.actual_game.frames += 1;
+    graph.actual_game.frame += 1;
 }
 
 fn ui_update(graph: Res<Graph>, mut egui_context: EguiContexts) {
@@ -113,6 +113,9 @@ fn ui_update(graph: Res<Graph>, mut egui_context: EguiContexts) {
                 "is_right_leg_contact: {:?}",
                 state.is_right_leg_contact()
             ));
+
+            ui.label("");
+            ui.label(format!("Frame: {:?}", graph.actual_game.frame));
         });
 
     egui::Window::new("Game History").show(egui_context.ctx_mut(), |ui| {
@@ -147,16 +150,11 @@ fn ui_update(graph: Res<Graph>, mut egui_context: EguiContexts) {
                     .done_games
                     .iter()
                     .enumerate()
-                    .map(|(i, game)| {
-                        [
-                            i as f64,
-                            game.total_points as f64 / (game.frames + 1) as f64,
-                        ]
-                    })
+                    .map(|(i, game)| [i as f64, game.total_points as f64 / (game.frame + 1) as f64])
                     .collect();
                 points_mean.push([
                     done_games.len() as f64,
-                    actual_game.total_points as f64 / (actual_game.frames + 1) as f64,
+                    actual_game.total_points as f64 / (actual_game.frame + 1) as f64,
                 ]);
                 plot_ui.line(Line::new(PlotPoints::new(points_mean)).name("Points Mean"));
             });

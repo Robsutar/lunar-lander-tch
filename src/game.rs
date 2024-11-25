@@ -34,7 +34,7 @@ pub const LEG_AWAY: f32 = 20.0; // Horizontal distance off center
 pub const LEG_DOWN: f32 = 18.0; // Vertical distance off center
 pub const LEG_W: f32 = 2.0; // Leg width
 pub const LEG_H: f32 = 8.0; // Leg height
-pub const LEG_SPRING_TORQUE: f32 = 40.0 * 2000.0; // 2000.0 is an arbitrary value to make rapier2d accord to box2d
+pub const LEG_SPRING_TORQUE: f32 = 40.0 * 200.0; // 200.0 is an arbitrary value to make rapier2d accord to box2d
 
 pub const SIDE_ENGINE_HEIGHT: f32 = 14.0;
 pub const SIDE_ENGINE_AWAY: f32 = 12.0; // Horizontal distance off center
@@ -599,7 +599,7 @@ fn game_init(
                     .local_anchor2(Vec2::new(0.0, 0.0)) // Leg anchor
                     .local_anchor1(leg_translation) // Module anchor
                     .limits(joint_limits) // Rotation limits
-                    .motor_position(i * leg_angle, LEG_SPRING_TORQUE, 150.0),
+                    .motor_position(i * leg_angle, LEG_SPRING_TORQUE, 300.0),
             ))
             .insert(CollisionGroups::new(
                 Group::GROUP_12,

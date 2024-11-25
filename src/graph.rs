@@ -2,7 +2,9 @@ use crate::{controller_ai, controller_human, game::*};
 use bevy::prelude::*;
 
 #[derive(Resource)]
-struct Graph {}
+struct Graph {
+    num_games: usize,
+}
 
 pub struct GraphPlugin;
 
@@ -37,9 +39,11 @@ fn game_post_reset(
     let state: State = ev_reset.read().next().unwrap().initial_state.clone();
 
     match graph {
-        Some(mut graph) => {}
+        Some(mut graph) => {
+            graph.num_games += 1;
+        }
         None => {
-            commands.insert_resource(Graph {});
+            commands.insert_resource(Graph { num_games: 0 });
         }
     }
 }

@@ -1,7 +1,8 @@
-use crate::controller_ai;
-use crate::controller_human;
-use crate::game::*;
+use crate::{controller_ai, controller_human, game::*};
 use bevy::prelude::*;
+
+#[derive(Resource)]
+struct Graph {}
 
 pub struct GraphPlugin;
 
@@ -28,17 +29,24 @@ impl Plugin for GraphPlugin {
     }
 }
 
-pub fn game_post_reset(mut ev_reset: EventReader<GameResetEvent>) {
+fn game_post_reset(
+    mut commands: Commands,
+    graph: Option<ResMut<Graph>>,
+    mut ev_reset: EventReader<GameResetEvent>,
+) {
     let state: State = ev_reset.read().next().unwrap().initial_state.clone();
 
-    println!("Post reset!");
+    match graph {
+        Some(mut graph) => {}
+        None => {
+            commands.insert_resource(Graph {});
+        }
+    }
 }
 
-pub fn game_pre_step() {
-    println!("Pre step!");
-}
+fn game_pre_step() {}
 
-pub fn game_post_step(mut ev_step_result: EventReader<StepResultEvent>) {
+fn game_post_step(mut ev_step_result: EventReader<StepResultEvent>) {
     let (next_state, reward, done) = ev_step_result.read().next().unwrap().clone().unpack();
 
     println!("Post step!");

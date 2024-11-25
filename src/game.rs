@@ -43,6 +43,7 @@ pub const VIEWPORT_W: f32 = 600.0; // Width of the window
 pub const VIEWPORT_H: f32 = 400.0; // Height of the window
 
 pub const GROUND_COLLISION_GROUP: Group = Group::GROUP_10;
+pub const LEG_ANGLE: f32 = 0.4;
 
 #[derive(Debug, Clone)]
 pub struct State(pub [f32; Self::SIZE]);
@@ -565,7 +566,6 @@ fn game_init(
         Vec2::new(LEG_W / SCALE, 0.0),                   // Right Upper
     ])
     .unwrap();
-    let leg_angle = 0.4;
 
     // Create left and right legs.
     let mut leg_ids = Vec::new();
@@ -573,9 +573,9 @@ fn game_init(
         let leg_translation = Vec2::new(i * LEG_AWAY / SCALE, 0.0);
 
         let joint_limits = if i == -1.0 {
-            [-0.9 - leg_angle, 0.5 + leg_angle]
+            [-0.9 - LEG_ANGLE, 0.5 + LEG_ANGLE]
         } else {
-            [-0.5 - leg_angle, 0.9 + leg_angle]
+            [-0.5 - LEG_ANGLE, 0.9 + LEG_ANGLE]
         };
 
         let leg_id = commands
@@ -593,7 +593,7 @@ fn game_init(
                     center_position.y + leg_translation.y,
                     0.0,
                 )
-                .with_rotation(Quat::from_rotation_z(i * leg_angle)),
+                .with_rotation(Quat::from_rotation_z(i * LEG_ANGLE)),
                 mesh: leg_pbr.0.clone(),
                 material: leg_pbr.1.clone(),
                 ..Default::default()
@@ -604,7 +604,7 @@ fn game_init(
                     .local_anchor2(Vec2::new(0.0, 0.0)) // Leg anchor
                     .local_anchor1(leg_translation) // Module anchor
                     .limits(joint_limits) // Rotation limits
-                    .motor_position(i * leg_angle, LEG_SPRING_TORQUE, 100.0),
+                    .motor_position(i * LEG_ANGLE, LEG_SPRING_TORQUE, 100.0),
             ))
             .insert(CollisionGroups::new(
                 Group::GROUP_12,
@@ -796,7 +796,7 @@ fn game_post_physics_update(
 
     let next_state = State([
         center_transform.translation.x / (VIEWPORT_W / SCALE / 2.0),
-        (center_transform.translation.y - (game.helipad_y + LEG_DOWN / SCALE))
+        (center_transform.translation.y + game.helipad_y - (LEG_DOWN * LEG_ANGLE.cos() / SCALE))
             / (VIEWPORT_H / SCALE / 2.0),
         center_velocity.linvel.x * (VIEWPORT_W / SCALE / 2.0) / FPS,
         center_velocity.linvel.y * (VIEWPORT_H / SCALE / 2.0) / FPS,
@@ -854,7 +854,7 @@ fn game_post_physics_update(
                     (100.0, true)
                 } else if next_state.position_x() > 1.0
                     || next_state.position_x() < -1.0
-                    || next_state.position_y() > 1.0
+                    || next_state.position_y() > 2.0
                 {
                     (-100.0, true)
                 } else {

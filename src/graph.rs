@@ -117,7 +117,7 @@ fn ui_update(graph: Res<Graph>, mut egui_context: EguiContexts) {
         });
 
     egui::Window::new("Game History").show(egui_context.ctx_mut(), |ui| {
-        Plot::new("total_points")
+        Plot::new("game_history")
             .show_background(false)
             .show_grid(false)
             .allow_zoom(false)
@@ -131,6 +131,18 @@ fn ui_update(graph: Res<Graph>, mut egui_context: EguiContexts) {
                 if graph.done_games.is_empty() {
                     return;
                 }
+
+                let mut total_points: Vec<[f64; 2]> = graph
+                    .done_games
+                    .iter()
+                    .enumerate()
+                    .map(|(i, game)| [i as f64, game.total_points as f64])
+                    .collect();
+                total_points.push([
+                    total_points[total_points.len() - 1][0] + 1.0,
+                    graph.actual_game.total_points as f64,
+                ]);
+                plot_ui.line(Line::new(PlotPoints::new(total_points)).name("Total Points"));
             });
     });
 }

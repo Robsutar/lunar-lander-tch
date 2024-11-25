@@ -9,6 +9,7 @@ mod util;
 
 use bevy::{prelude::*, window::WindowResolution};
 use game::*;
+use graph::GraphPlugin;
 
 pub const WINDOW_ZOOM: f32 = 2.0; // Affects only visually the scale of the window, adding zoom to camera.
 
@@ -26,6 +27,7 @@ fn main() {
     }));
 
     app.add_plugins(GamePlugin::default());
+    app.add_plugins(GraphPlugin);
 
     if human_controller {
         app.add_systems(PostGameResetSchedule, controller_human::game_post_reset);

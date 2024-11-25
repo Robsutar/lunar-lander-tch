@@ -428,7 +428,7 @@ fn game_init(
     // Create assets
     let thruster_particle = Particle {
         lifetime: Duration::from_millis(250),
-        color: materials.add(Color::srgb_u8(232, 204, 42)),
+        color: Color::srgb_u8(245, 69, 66),
         mesh: Mesh2dHandle(meshes.add(Cuboid::new(3.0 / SCALE, 3.0 / SCALE, 0.0))),
         friction: 0.1,
         collision_radius: 1.5 / SCALE,

@@ -6,7 +6,7 @@ use bevy_rapier2d::prelude::*;
 #[derive(Component, Clone)]
 pub struct Particle {
     pub lifetime: Duration,
-    pub color: Handle<ColorMaterial>,
+    pub color: Color,
     pub mesh: Mesh2dHandle,
     pub friction: f32,
     pub collision_radius: f32,
@@ -44,6 +44,7 @@ impl<T: ScheduleLabel + Clone> Plugin for ParticlePlugin<T> {
 fn spawn_pending_particles(
     mut commands: Commands,
     mut ev_spawn_particle: ResMut<Events<SpawnParticleEvent>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     if false {
         return;
@@ -65,7 +66,7 @@ fn spawn_pending_particles(
             })
             .insert(ColorMesh2dBundle {
                 mesh: spawning.particle.mesh,
-                material: spawning.particle.color,
+                material: materials.add(spawning.particle.color),
                 transform: spawning.initial_transform,
                 ..Default::default()
             })
@@ -79,13 +80,20 @@ fn spawn_pending_particles(
 
 fn update_spawned_particles(
     mut commands: Commands,
-    mut q_spawned_particles: Query<(Entity, &SpawnedParticle)>,
+    mut q_spawned_particles: Query<(Entity, &SpawnedParticle, &Handle<ColorMaterial>)>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     let now = Instant::now();
 
-    for (entity, spawned) in q_spawned_particles.iter_mut() {
-        if now - spawned.spawn_instant >= spawned.lifetime {
+    for (entity, spawned, color_handle) in q_spawned_particles.iter_mut() {
+        let elapsed = now - spawned.spawn_instant;
+        if elapsed >= spawned.lifetime {
             commands.entity(entity).despawn_recursive();
+        } else {
+            let progress = elapsed.as_secs_f32() / spawned.lifetime.as_secs_f32();
+
+            let color_material = materials.get_mut(color_handle).unwrap();
+            color_material.color.set_alpha(1.0 - progress);
         }
     }
 }

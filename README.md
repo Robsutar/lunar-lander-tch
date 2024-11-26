@@ -13,3 +13,9 @@ You need the rust compiler (cargo), then run:
 cargo run --release
 ```
 
+#### Controlling manually
+There is an human-controller implementation, for this lunar lander game, to enable it change the human_controller boolean to true in [main.rs](src/main.rs):
+```diff
+-    let human_controller = false;
++    let human_controller = true;
+```

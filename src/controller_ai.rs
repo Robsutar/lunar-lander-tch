@@ -32,6 +32,8 @@ pub fn game_post_reset(
 
             // Update the ε value
             holder.agent().decay_epsilon();
+
+            holder.agent().save("model.ot");
         }
         None => {
             commands.insert_resource(GameHolder {

@@ -4,8 +4,8 @@ use rand::{thread_rng, Rng};
 use tch::Tensor;
 
 use crate::{
+    environment::{Action, State},
     experience::*,
-    game::{Action, State},
     model::*,
     util::FixedVecDeque,
 };

@@ -1,6 +1,6 @@
 use tch::Tensor;
 
-use crate::game::{Action, State};
+use crate::environment::{Action, State};
 
 type DType = f32;
 

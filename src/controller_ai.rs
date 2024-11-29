@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use crate::{agent::*, game::*, model::*};
+use crate::{agent::*, experience::*, game::*};
 use bevy::prelude::*;
 
 const MAX_NUM_TIME_STEPS: usize = 1000;

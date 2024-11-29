@@ -3,7 +3,12 @@ use std::path::Path;
 use rand::{thread_rng, Rng};
 use tch::Tensor;
 
-use crate::{model::*, util::FixedVecDeque, Action, State};
+use crate::{
+    experience::*,
+    game::{Action, State},
+    model::*,
+    util::FixedVecDeque,
+};
 
 /// Size of memory buffer.
 const MEMORY_SIZE: usize = 100_000;

@@ -1,6 +1,7 @@
 mod agent;
 mod controller_ai;
 mod controller_human;
+mod experience;
 mod game;
 mod graph;
 mod model;
@@ -11,7 +12,7 @@ use bevy::{prelude::*, window::WindowResolution};
 use game::*;
 use graph::GraphPlugin;
 
-pub const WINDOW_ZOOM: f32 = 2.0; // Affects only visually the scale of the window, adding zoom to camera.
+const WINDOW_ZOOM: f32 = 2.0; // Affects only visually the scale of the window, adding zoom to camera.
 
 fn main() {
     let human_controller = false;

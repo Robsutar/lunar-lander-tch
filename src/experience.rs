@@ -1,7 +1,9 @@
-use tch::Tensor;
+use rand::seq::SliceRandom;
+use tch::{Device, Kind, Tensor};
 
 use crate::environment::{Action, State};
 
+pub const DEVICE: Device = Device::Cpu;
 type DType = f32;
 
 /// Represents an experience tuple (𝑆𝑡, 𝐴𝑡, 𝑅𝑡, 𝑆𝑡+1) used in Deep Q-Network (DQN) algorithms.
@@ -23,86 +25,125 @@ pub struct Experience {
     /// A boolean flag that indicates if the episode has terminated.
     pub done: bool,
 }
+pub struct ExperienceReplayBuffer {
+    /// Shape: (capacity, State::SIZE)
+    states: Tensor,
+    /// Shape: (capacity, 1)
+    actions: Tensor,
+    /// Shape: (capacity, 1)
+    rewards: Tensor,
+    /// Shape: (capacity, State::SIZE)
+    next_states: Tensor,
+    /// Shape: (capacity, 1)
+    done_values: Tensor,
 
-pub struct ExperienceConcat {
-    pub state: Vec<DType>,
-    pub action: Vec<DType>,
-    pub reward: Vec<DType>,
-    pub next_state: Vec<DType>,
-    pub done: Vec<DType>,
-    target_size: usize,
+    capacity: usize,
+    position: usize,
+    size: usize,
 }
-impl ExperienceConcat {
-    pub fn building(target_size: usize) -> Self {
+
+impl ExperienceReplayBuffer {
+    pub fn new(capacity: usize) -> Self {
+        let state_size_i64 = State::SIZE as i64;
+        let capacity_i64 = capacity as i64;
         Self {
-            state: Vec::with_capacity(target_size * State::SIZE),
-            action: Vec::with_capacity(target_size * Action::SIZE),
-            reward: Vec::with_capacity(target_size),
-            next_state: Vec::with_capacity(target_size * State::SIZE),
-            done: Vec::with_capacity(target_size),
-            target_size,
+            states: Tensor::zeros(&[capacity_i64, state_size_i64], (Kind::Float, DEVICE)),
+            actions: Tensor::zeros(&[capacity_i64, 1], (Kind::Int64, DEVICE)),
+            rewards: Tensor::zeros(&[capacity_i64, 1], (Kind::Float, DEVICE)),
+            next_states: Tensor::zeros(&[capacity_i64, state_size_i64], (Kind::Float, DEVICE)),
+            done_values: Tensor::zeros(&[capacity_i64, 1], (Kind::Float, DEVICE)),
+            capacity,
+            position: 0,
+            size: 0,
         }
     }
 
+    pub fn size(&self) -> usize {
+        self.size
+    }
+
+    /// Appends an experience to the buffer
+    ///
+    /// If the buffer is full, replace other experience by the new
+    /// experience (rotational position).
     pub fn push(&mut self, experience: &Experience) {
-        if self.is_built() {
-            panic!("ExperienceConcat already built (full).");
+        let idx = (self.position % self.capacity) as i64;
+
+        // Store each component in its respective tensor
+        self.states
+            .get(idx)
+            .copy_(&Tensor::from_slice(&experience.state.0));
+        self.actions
+            .get(idx)
+            .copy_(&Tensor::from(experience.action.to_index() as i64));
+        self.rewards
+            .get(idx)
+            .copy_(&Tensor::from(experience.reward));
+        self.next_states
+            .get(idx)
+            .copy_(&Tensor::from_slice(&experience.next_state.0));
+        self.done_values
+            .get(idx)
+            .copy_(&Tensor::from(if experience.done { 1.0 } else { 0.0 }));
+
+        self.position = (self.position + 1) % self.capacity;
+        if self.size < self.capacity {
+            self.size += 1;
         }
-        self.state.extend_from_slice(&experience.state.0);
-        self.action.push(experience.action.to_index() as DType);
-        self.reward.push(experience.reward);
-        self.next_state.extend_from_slice(&experience.next_state.0);
-        self.done.push(if experience.done { 1.0 } else { 0.0 });
     }
 
-    pub fn is_built(&self) -> bool {
-        self.done.len() == self.target_size
-    }
-
-    pub fn check_built(&self) {
-        if !self.is_built() {
+    /// Samples experiences from this buffer with a desired size.
+    ///
+    /// # Panics
+    /// If the buffer has less elements than `batch_size`
+    pub fn sample(&self, batch_size: usize) -> Experiences {
+        if self.size < batch_size {
             panic!(
-                "ExperienceConcat is not built, filled: {:?}, target size: {:?}",
-                self.done.len(),
-                self.target_size
+                "Not enough experiences in the buffer to sample a batch with size {batch_size}."
             );
+        }
+
+        let mut rng = rand::thread_rng();
+        let indices = Tensor::from_slice(
+            &(0..self.size as i64)
+                .collect::<Vec<_>>()
+                .choose_multiple(&mut rng, batch_size)
+                .cloned()
+                .collect::<Vec<_>>(),
+        )
+        .to_kind(Kind::Int64);
+
+        Experiences {
+            states: self.states.index_select(0, &indices),
+            actions: self.actions.index_select(0, &indices),
+            rewards: self.rewards.index_select(0, &indices),
+            next_states: self.next_states.index_select(0, &indices),
+            done_values: self.done_values.index_select(0, &indices),
         }
     }
 }
 
 /// Experiences represented by tensors.
 pub struct Experiences {
+    /// State batch.
     states: Tensor,
+    /// Action batch.
     actions: Tensor,
+    /// Reward batch.
     rewards: Tensor,
+    /// Next states batch.
     next_states: Tensor,
+    /// Done batch.
     done_values: Tensor,
 }
 impl Experiences {
-    pub fn from_concat(snapshots: &ExperienceConcat) -> Self {
-        snapshots.check_built();
-
-        let len = snapshots.target_size as i64;
-        let state_view = [len, State::SIZE as i64];
-        let action_view = [len, 1];
-        let reward_view = [len, 1];
-        let done_view = [len, 1];
-
-        let states = Tensor::from_slice(&snapshots.state).view(state_view);
-        let actions = Tensor::from_slice(&snapshots.action).view(action_view);
-        let rewards = Tensor::from_slice(&snapshots.reward).view(reward_view);
-        let next_states = Tensor::from_slice(&snapshots.next_state).view(state_view);
-        let done_values = Tensor::from_slice(&snapshots.done).view(done_view);
-
-        Self {
-            states,
-            actions,
-            rewards,
-            next_states,
-            done_values,
-        }
-    }
-
+    /// # Returns
+    ///
+    /// - State batch.
+    /// - Action batch.
+    /// - Reward batch.
+    /// - Next states batch.
+    /// - Done batch.
     pub fn unpack(&self) -> (&Tensor, &Tensor, &Tensor, &Tensor, &Tensor) {
         (
             &self.states,

@@ -1,12 +1,10 @@
 use tch::nn::{self, Adam, Linear, Module, Optimizer, OptimizerConfig, VarStore};
-use tch::{Device, Kind, Tensor};
+use tch::{Kind, Tensor};
 
 use crate::{
     environment::{Action, State},
     experience::*,
 };
-
-const DEVICE: Device = Device::Cpu;
 
 /// A neural network model designed for Deep Q-Network (DQN) algorithms.
 ///

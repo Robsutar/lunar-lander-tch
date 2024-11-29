@@ -69,7 +69,7 @@ pub fn env_post_step(
 
     // Store experience tuple (S,A,R,S') in the memory buffer.
     // We store the done variable as well for convenience.
-    holder.agent().append_experience(Experience {
+    holder.agent().append_experience(&Experience {
         state: holder.state.clone(),
         action: holder.action.clone(),
         reward,

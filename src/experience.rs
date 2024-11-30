@@ -72,19 +72,19 @@ impl ExperienceReplayBuffer {
         // Store each component in its respective tensor
         self.states
             .get(idx)
-            .copy_(&Tensor::from_slice(&experience.state.0));
+            .copy_(&Tensor::from_slice(&experience.state.0).to(DEVICE));
         self.actions
             .get(idx)
-            .copy_(&Tensor::from(experience.action.to_index() as i64));
+            .copy_(&Tensor::from(experience.action.to_index() as i64).to(DEVICE));
         self.rewards
             .get(idx)
-            .copy_(&Tensor::from(experience.reward));
+            .copy_(&Tensor::from(experience.reward).to(DEVICE));
         self.next_states
             .get(idx)
-            .copy_(&Tensor::from_slice(&experience.next_state.0));
+            .copy_(&Tensor::from_slice(&experience.next_state.0).to(DEVICE));
         self.done_values
             .get(idx)
-            .copy_(&Tensor::from(if experience.done { 1.0 } else { 0.0 }));
+            .copy_(&Tensor::from(if experience.done { 1.0 } else { 0.0 }).to(DEVICE));
 
         self.position = (self.position + 1) % self.capacity;
         if self.size < self.capacity {
@@ -111,6 +111,7 @@ impl ExperienceReplayBuffer {
                 .cloned()
                 .collect::<Vec<_>>(),
         )
+        .to(DEVICE)
         .to_kind(Kind::Int64);
 
         Experiences {

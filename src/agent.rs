@@ -29,7 +29,7 @@ const E_MIN: f64 = 0.01;
 
 pub struct Agent {
     memory_buffer: ExperienceReplayBuffer,
-    trainer: QTrainer,
+    trainer: DDqnTrainer,
     epsilon: f64,
 }
 
@@ -37,7 +37,7 @@ impl Agent {
     pub fn load_if_exists(name: &str) -> Self {
         let mut exit = Self {
             memory_buffer: ExperienceReplayBuffer::new(MEMORY_SIZE),
-            trainer: QTrainer::new(ALPHA, GAMMA, TAU),
+            trainer: DDqnTrainer::new(ALPHA, GAMMA, TAU),
             epsilon: 1.0,
         };
 
@@ -90,7 +90,7 @@ impl Agent {
 
         let final_move = if rng.gen_range(0.0..1.0) > self.epsilon {
             let state = Tensor::from_slice(&state.0);
-            let prediction = self.trainer.q_forward(&state);
+            let prediction = self.trainer.online_q_forward(&state);
             let target_move = prediction.argmax(0, false).int64_value(&[]);
             Action::from_index(target_move as u8)
         } else {

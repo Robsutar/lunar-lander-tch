@@ -53,15 +53,16 @@ impl Module for DeepQNet {
     }
 }
 
-/// Represents a trainer for Deep Q-Network (DQN) algorithms.
+/// Represents a trainer for Double Deep Q-Network (D-DQN) algorithms.
 ///
-/// It utilizes two separate neural networks: the primary Q-network (q_network)
-/// and the target Q-network (target_q_network).
+/// It utilizes two separate neural networks: the online Q-network (online_q_network) and the
+/// target Q-network (target_q_network).
 ///
-/// The use of two networks helps stabilize training by providing a stable
-/// target for Q-value estimates.
-pub struct QTrainer {
-    // The primary Q-network trained to estimate action-values
+/// Tn comparison with the standard DQN, the use of two networks helps stabilize training by
+/// providing a stable, target for Q-value estimates, while reduces overestimations that is common
+/// in standard DQNs.
+pub struct DDqnTrainer {
+    // The online Q-network trained to estimate action-values
     online_q_network: DeepQNet,
     // Optimizer for updating the online_q_network's parameters
     online_q_optimizer: Optimizer,
@@ -79,7 +80,7 @@ pub struct QTrainer {
     tau: f64,
 }
 
-impl QTrainer {
+impl DDqnTrainer {
     pub fn new(q_lr: f64, gamma: f32, tau: f64) -> Self {
         let q_vs = VarStore::new(DEVICE);
         let target_q_vs = VarStore::new(DEVICE);

@@ -29,7 +29,7 @@ const E_MIN: f64 = 0.01;
 
 pub struct Agent {
     memory_buffer: ExperienceReplayBuffer,
-    trainer: QTrainer,
+    trainer: DDqnTrainer,
     epsilon: f64,
 }
 
@@ -37,7 +37,7 @@ impl Agent {
     pub fn load_if_exists(name: &str) -> Self {
         let mut exit = Self {
             memory_buffer: ExperienceReplayBuffer::new(MEMORY_SIZE),
-            trainer: QTrainer::new(ALPHA, GAMMA, TAU),
+            trainer: DDqnTrainer::new(ALPHA, GAMMA, TAU),
             epsilon: 1.0,
         };
 

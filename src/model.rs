@@ -125,13 +125,18 @@ impl QTrainer {
         // Unpack the mini-batch of experience tuples
         let (states, actions, rewards, next_states, done_values) = experiences.unpack();
 
-        // Compute max Q^(s,a)
-        let (max_qsa, _) = self.target_q_network.forward(&next_states).max_dim(1, true);
+        // Action Selection: Get the best actions for next_states from the local network
+        let next_q_values_local = self.q_network.forward(&next_states);
+        let (_, best_actions) = next_q_values_local.max_dim(1, true); // Indices of best actions
 
-        // Set y = R if episode terminates, otherwise set y = R + γ max Q^(s,a).
-        let y_targets: Tensor = rewards + (self.gamma * max_qsa * (1.0 - done_values));
+        // Action Evaluation: Get Q-values from the target network for the best actions
+        let next_q_values_target = self.target_q_network.forward(&next_states);
+        let selected_q_values = next_q_values_target.gather(1, &best_actions, false);
 
-        // Get the q_values
+        // Compute y_targets using Double DQN formula
+        let y_targets = rewards + (self.gamma * selected_q_values * (1.0 - done_values));
+
+        // Get the Q-values for the actions actually taken
         let q_values = self.q_network.forward(&states);
         let q_values = q_values.gather(1, &actions.to_kind(Kind::Int64), false);
 

@@ -62,11 +62,11 @@ impl Module for DeepQNet {
 /// target for Q-value estimates.
 pub struct QTrainer {
     // The primary Q-network trained to estimate action-values
-    q_network: DeepQNet,
-    // Optimizer for updating the q_network's parameters
-    q_optimizer: Optimizer,
-    // Variable store holding the q_network's parameters
-    q_vs: VarStore,
+    online_q_network: DeepQNet,
+    // Optimizer for updating the online_q_network's parameters
+    online_q_optimizer: Optimizer,
+    // Variable store holding the online_q_network's parameters
+    online_q_vs: VarStore,
 
     // The target Q-network providing stable targets
     target_q_network: DeepQNet,
@@ -84,9 +84,9 @@ impl QTrainer {
         let q_vs = VarStore::new(DEVICE);
         let target_q_vs = VarStore::new(DEVICE);
         Self {
-            q_network: DeepQNet::new(&q_vs),
-            q_optimizer: Adam::default().build(&q_vs, q_lr).unwrap(),
-            q_vs,
+            online_q_network: DeepQNet::new(&q_vs),
+            online_q_optimizer: Adam::default().build(&q_vs, q_lr).unwrap(),
+            online_q_vs: q_vs,
 
             target_q_network: DeepQNet::new(&target_q_vs),
             target_q_vs,
@@ -96,24 +96,24 @@ impl QTrainer {
         }
     }
 
-    /// Loads data from path into q_network var store.
+    /// Loads data from path into online_q_network var store.
     pub fn load_in_q_network<T: AsRef<std::path::Path>>(&mut self, path: T) {
-        self.q_vs.load(path).unwrap();
+        self.online_q_vs.load(path).unwrap();
     }
 
-    /// Copies the data from q_network var store to target_q_network.
+    /// Copies the data from online_q_network var store to target_q_network.
     pub fn fill_q_network_in_target(&mut self) {
-        self.target_q_vs.copy(&self.q_vs).unwrap();
+        self.target_q_vs.copy(&self.online_q_vs).unwrap();
     }
 
-    /// Saves the q_network var store in path.
+    /// Saves the online_q_network var store in path.
     pub fn save_q_network<T: AsRef<std::path::Path>>(&self, path: T) {
-        self.q_vs.save(path).unwrap();
+        self.online_q_vs.save(path).unwrap();
     }
 
-    /// Uses q_network to predict values, xs should have [`State::SIZE`] values in a single dimension.
-    pub fn q_forward(&self, xs: &Tensor) -> Tensor {
-        self.q_network.forward(&xs.to(DEVICE))
+    /// Uses online_q_network to predict values, xs must have [`State::SIZE`] values in a single dimension.
+    pub fn online_q_forward(&self, xs: &Tensor) -> Tensor {
+        self.online_q_network.forward(&xs.to(DEVICE))
     }
 
     /// Calculates the loss.
@@ -126,7 +126,7 @@ impl QTrainer {
         let (states, actions, rewards, next_states, done_values) = experiences.unpack();
 
         // Action Selection: Get the best actions for next_states from the local network
-        let next_q_values_local = self.q_network.forward(&next_states);
+        let next_q_values_local = self.online_q_network.forward(&next_states);
         let (_, best_actions) = next_q_values_local.max_dim(1, true); // Indices of best actions
 
         // Action Evaluation: Get Q-values from the target network for the best actions
@@ -137,7 +137,7 @@ impl QTrainer {
         let y_targets = rewards + (self.gamma * selected_q_values * (1.0 - done_values));
 
         // Get the Q-values for the actions actually taken
-        let q_values = self.q_network.forward(&states);
+        let q_values = self.online_q_network.forward(&states);
         let q_values = q_values.gather(1, &actions.to_kind(Kind::Int64), false);
 
         // Compute the loss
@@ -151,19 +151,19 @@ impl QTrainer {
         // Calculate the loss
         let loss = self.compute_loss(&experiences);
 
-        self.q_optimizer.zero_grad();
+        self.online_q_optimizer.zero_grad();
         // Compute gradients of the loss with respect to the weights
         loss.backward();
-        // Update the weights of the q_network.
-        self.q_optimizer.step();
+        // Update the weights of the online_q_network.
+        self.online_q_optimizer.step();
 
-        // Update the weights of target q_network using soft update.
+        // Update the weights of target online_q_network using soft update.
         tch::no_grad(|| {
             for (target_params, q_net_params) in self
                 .target_q_vs
                 .trainable_variables()
                 .iter_mut()
-                .zip(self.q_vs.trainable_variables().iter())
+                .zip(self.online_q_vs.trainable_variables().iter())
             {
                 let new_target_params =
                     self.tau * q_net_params.data() + (1.0 - self.tau) * target_params.data();

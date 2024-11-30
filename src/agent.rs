@@ -90,7 +90,7 @@ impl Agent {
 
         let final_move = if rng.gen_range(0.0..1.0) > self.epsilon {
             let state = Tensor::from_slice(&state.0);
-            let prediction = self.trainer.q_forward(&state);
+            let prediction = self.trainer.online_q_forward(&state);
             let target_move = prediction.argmax(0, false).int64_value(&[]);
             Action::from_index(target_move as u8)
         } else {

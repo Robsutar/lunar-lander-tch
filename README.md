@@ -5,7 +5,7 @@ LunarLander-v2 (OpenAI Gym) example, using rust, trc-rs and bevy
 
 #### There are two implementations in this repository:
 - [Lunar Lander v2 created by OpenAI Gym](https://github.com/openai/gym/blob/master/gym/envs/box2d/lunar_lander.py), written in rust replacing the original model's python, using the rapier2d physics engine replacing box2d, and bevy, game engine replacing pygame.
-- Solution for the lunar lander, based on the solution from [DeepLearning.AI](https://www.deeplearning.ai/) & [Stanford University](https://www.stanford.edu/), using tch-rs (pytorch bindings for rust) replacing tensorflow.
+- Solution for the lunar lander, based on the solution from [DeepLearning.AI](https://www.deeplearning.ai/) & [Stanford University](https://www.stanford.edu/), using tch-rs (pytorch bindings for rust) replacing tensorflow. The solution was also powered with Double Deep Q-Network implementation using the information in the article [Deep Reinforcement Learning with Double Q-learning” (Hasselt et al., 2015)](https://arxiv.org/pdf/1509.06461.pdf).
 
 #### Building and running
 You need the rust compiler (cargo), then run:

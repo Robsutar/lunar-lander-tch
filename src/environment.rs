@@ -15,12 +15,12 @@ use rand::Rng;
 use crate::{particle::*, util::*};
 
 pub const FPS: f32 = 50.0;
-pub const SCALE: f32 = 30.0; // Affects how fast-paced the game is, forces should be adjusted as well
+pub const SCALE: f32 = 30.0; // Affects how fast-paced the environment is, forces should be adjusted as well
 
 pub const MAIN_ENGINE_POWER: f32 = 13.0 * 0.125; // 0.125 is an arbitrary value to make rapier2d accord to box2d
 pub const SIDE_ENGINE_POWER: f32 = 0.6 * 0.4; // 0.4 is an arbitrary value to make rapier2d accord to box2d
 
-pub const INITIAL_RANDOM: f32 = 1000.0 * 0.015; // Set 1500 to make game harder, 0.015 is an arbitrary value to make rapier2d accord to box2d
+pub const INITIAL_RANDOM: f32 = 1000.0 * 0.015; // Set 1500 to make environment harder, 0.015 is an arbitrary value to make rapier2d accord to box2d
 
 pub const LANDER_POLY: [Vec2; 6] = [
     Vec2::new(-14.0, 17.0),  // Left Upper
@@ -84,7 +84,7 @@ impl State {
 }
 
 #[derive(Event)]
-pub struct GameResetEvent {
+pub struct EnvResetEvent {
     pub initial_state: State,
 }
 
@@ -217,12 +217,12 @@ pub enum LegState {
 }
 
 enum PostUpdateCall {
-    GameReset,
-    GameStep(Action),
+    EnvReset,
+    EnvStep(Action),
 }
 
 #[derive(Component)]
-pub struct Game {
+pub struct Environment {
     thruster_particle: Particle,
 
     center_id: Entity,
@@ -236,10 +236,10 @@ pub struct Game {
     prev_shaping: Option<f32>,
     is_finished: Option<StepResultEvent>,
 }
-impl Game {
+impl Environment {
     pub fn reset(commands: &mut Commands) {
         commands.add(|world: &mut World| {
-            world.run_schedule(GameResetSchedule);
+            world.run_schedule(EnvResetSchedule);
         })
     }
 
@@ -250,7 +250,7 @@ impl Game {
     ) {
         ev_step_action.send(action);
         commands.add(|world: &mut World| {
-            world.run_schedule(PreGameStepSchedule);
+            world.run_schedule(PreEnvStepSchedule);
         })
     }
 
@@ -260,20 +260,20 @@ impl Game {
 }
 
 #[derive(Resource)]
-pub struct GameUpdater {
+struct EnvUpdater {
     timer: Timer,
 }
 
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
-struct GameResetSchedule;
+struct EnvResetSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
-pub struct PostGameResetSchedule;
+pub struct PostEnvResetSchedule;
 
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 pub struct AvailableUpdateSchedule;
 
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
-struct PreGameStepSchedule;
+struct PreEnvStepSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 struct PhysicsStepSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
@@ -281,30 +281,30 @@ struct ResetPostPhysicsStepSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
 struct StepPostPhysicsStepSchedule;
 #[derive(ScheduleLabel, Hash, Debug, PartialEq, Eq, Clone)]
-pub struct PostGameStepSchedule;
+pub struct PostEnvStepSchedule;
 
-pub struct GamePlugin {
+pub struct EnvironmentPlugin {
     gravity: f32,
 }
-impl Default for GamePlugin {
+impl Default for EnvironmentPlugin {
     fn default() -> Self {
         Self { gravity: -10.0 }
     }
 }
-impl Plugin for GamePlugin {
+impl Plugin for EnvironmentPlugin {
     fn build(&self, app: &mut App) {
-        app.init_schedule(GameResetSchedule);
-        app.init_schedule(PostGameResetSchedule);
+        app.init_schedule(EnvResetSchedule);
+        app.init_schedule(PostEnvResetSchedule);
 
         app.init_schedule(AvailableUpdateSchedule);
 
-        app.init_schedule(PreGameStepSchedule);
+        app.init_schedule(PreEnvStepSchedule);
         app.init_schedule(PhysicsStepSchedule);
         app.init_schedule(ResetPostPhysicsStepSchedule);
         app.init_schedule(StepPostPhysicsStepSchedule);
-        app.init_schedule(PostGameStepSchedule);
+        app.init_schedule(PostEnvStepSchedule);
 
-        app.insert_resource(GameUpdater {
+        app.insert_resource(EnvUpdater {
             timer: Timer::from_seconds(1.0 / FPS, TimerMode::Repeating),
         });
         app.insert_resource(RapierConfiguration {
@@ -321,20 +321,20 @@ impl Plugin for GamePlugin {
         );
 
         app.add_plugins(ParticlePlugin {
-            schedule: PostGameStepSchedule,
+            schedule: PostEnvStepSchedule,
         });
 
-        app.add_event::<GameResetEvent>();
+        app.add_event::<EnvResetEvent>();
         app.add_event::<Action>();
         app.add_event::<StepResultEvent>();
 
-        app.add_systems(PostStartup, game_init);
-        app.add_systems(GameResetSchedule, game_reset);
+        app.add_systems(PostStartup, env_init);
+        app.add_systems(EnvResetSchedule, env_reset);
 
         app.add_systems(Update, update_available_schedule);
-        app.add_systems(PreGameStepSchedule, game_pre_update);
-        app.add_systems(ResetPostPhysicsStepSchedule, game_post_physics_update);
-        app.add_systems(StepPostPhysicsStepSchedule, game_post_physics_update);
+        app.add_systems(PreEnvStepSchedule, env_pre_update);
+        app.add_systems(ResetPostPhysicsStepSchedule, env_post_physics_update);
+        app.add_systems(StepPostPhysicsStepSchedule, env_post_physics_update);
     }
 }
 
@@ -419,7 +419,7 @@ fn spawn_terrain_poly_mesh(
         .id()
 }
 
-fn game_init(
+fn env_init(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -615,7 +615,7 @@ fn game_init(
         leg_ids.push(leg_id);
     }
 
-    commands.spawn(Game {
+    commands.spawn(Environment {
         thruster_particle,
 
         center_id,
@@ -625,7 +625,7 @@ fn game_init(
         helipad_y,
 
         frame: 0,
-        next_post_update_call: PostUpdateCall::GameReset,
+        next_post_update_call: PostUpdateCall::EnvReset,
         prev_shaping: None,
         is_finished: None,
     });
@@ -636,17 +636,17 @@ fn game_init(
     });
 }
 
-fn game_reset(
+fn env_reset(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut q_game: Query<&mut Game>,
+    mut q_env: Query<&mut Environment>,
 ) {
     let mut rng = rand::thread_rng();
 
-    let mut game = q_game.single_mut();
+    let mut env = q_env.single_mut();
 
-    commands.entity(game.ground_id).despawn_recursive();
+    commands.entity(env.ground_id).despawn_recursive();
 
     let w: f32 = VIEWPORT_W / SCALE;
     let h = VIEWPORT_H / SCALE;
@@ -662,12 +662,12 @@ fn game_reset(
         h,
         helipad_y,
     );
-    game.ground_id = ground_id;
+    env.ground_id = ground_id;
 
     let center_position = Vec2::new(0.0, VIEWPORT_H / SCALE / 2.0);
 
     commands
-        .entity(game.center_id)
+        .entity(env.center_id)
         .insert(Transform::from_translation(Vec3::new(
             center_position.x,
             center_position.y,
@@ -683,7 +683,7 @@ fn game_reset(
         });
 
     for (index, i) in [-1.0, 1.0].into_iter().enumerate() {
-        let leg = game.leg_ids[index];
+        let leg = env.leg_ids[index];
         let leg_translation = Vec2::new(i * LEG_AWAY / SCALE, 0.0);
 
         commands
@@ -696,10 +696,10 @@ fn game_reset(
             .insert(Velocity::zero());
     }
 
-    game.frame = 0;
-    game.next_post_update_call = PostUpdateCall::GameReset;
-    game.prev_shaping = None;
-    game.is_finished = None;
+    env.frame = 0;
+    env.next_post_update_call = PostUpdateCall::EnvReset;
+    env.prev_shaping = None;
+    env.is_finished = None;
 
     commands.add(|world: &mut World| {
         world.run_schedule(PhysicsStepSchedule);
@@ -710,7 +710,7 @@ fn game_reset(
 fn update_available_schedule(
     mut commands: Commands,
     time: Res<Time>,
-    mut updater: ResMut<GameUpdater>,
+    mut updater: ResMut<EnvUpdater>,
 ) {
     updater.timer.tick(time.delta());
     while updater.timer.finished() {
@@ -721,39 +721,39 @@ fn update_available_schedule(
     }
 }
 
-fn game_pre_update(
+fn env_pre_update(
     mut commands: Commands,
     mut ev_spawn_particle: EventWriter<SpawnParticleEvent>,
     mut ev_step_action: ResMut<Events<Action>>,
-    mut q_game: Query<&mut Game>,
+    mut q_env: Query<&mut Environment>,
     q_center: Query<&Transform, With<LanderCenter>>,
     mut ev_step_result: EventWriter<StepResultEvent>,
 ) {
     let action = ev_step_action.drain().next().unwrap();
 
-    let mut game = q_game.single_mut();
-    let center_transform = q_center.get(game.center_id).unwrap();
+    let mut env = q_env.single_mut();
+    let center_transform = q_center.get(env.center_id).unwrap();
 
     // Check if the simulation is already finished
-    if let Some(result) = &game.is_finished {
+    if let Some(result) = &env.is_finished {
         ev_step_result.send(result.clone());
         commands.add(|world: &mut World| {
-            world.run_schedule(PostGameStepSchedule);
+            world.run_schedule(PostEnvStepSchedule);
         });
         return;
     }
 
     // Apply action in simulation
     if let Some(force) = action.to_impulse(*center_transform) {
-        commands.entity(game.center_id).insert(force);
+        commands.entity(env.center_id).insert(force);
     }
     if let Some(spawn_particle) =
-        action.to_spawn_particle(game.thruster_particle.clone(), *center_transform)
+        action.to_spawn_particle(env.thruster_particle.clone(), *center_transform)
     {
         ev_spawn_particle.send(spawn_particle);
     }
 
-    game.next_post_update_call = PostUpdateCall::GameStep(action);
+    env.next_post_update_call = PostUpdateCall::EnvStep(action);
 
     commands.add(|world: &mut World| {
         world.run_schedule(PhysicsStepSchedule);
@@ -761,21 +761,21 @@ fn game_pre_update(
     });
 }
 
-fn game_post_physics_update(
+fn env_post_physics_update(
     mut commands: Commands,
     rapier_context: Res<RapierContext>,
-    mut q_game: Query<&mut Game>,
+    mut q_env: Query<&mut Environment>,
     q_center: Query<(&Transform, &Velocity), With<LanderCenter>>,
-    mut ev_reset: EventWriter<GameResetEvent>,
+    mut ev_reset: EventWriter<EnvResetEvent>,
     mut ev_step: EventWriter<StepResultEvent>,
 ) {
-    let mut game = q_game.single_mut();
-    let (center_transform, center_velocity) = q_center.get(game.center_id).unwrap();
+    let mut env = q_env.single_mut();
+    let (center_transform, center_velocity) = q_center.get(env.center_id).unwrap();
 
     // Read state after actions applied
     let mut leg_states = [LegState::InAir; 2];
 
-    for (i, leg) in game.leg_ids.iter().enumerate() {
+    for (i, leg) in env.leg_ids.iter().enumerate() {
         let leg = *leg;
 
         for contact_pair in rapier_context.contact_pairs_with(leg) {
@@ -786,7 +786,7 @@ fn game_post_physics_update(
                     contact_pair.collider1()
                 };
 
-                if other_collider == game.ground_id {
+                if other_collider == env.ground_id {
                     leg_states[i] = LegState::InGround;
                 }
             }
@@ -795,7 +795,7 @@ fn game_post_physics_update(
 
     let next_state = State([
         center_transform.translation.x / (VIEWPORT_W / SCALE / 2.0),
-        (center_transform.translation.y + game.helipad_y - (LEG_DOWN * LEG_ANGLE.cos() / SCALE))
+        (center_transform.translation.y + env.helipad_y - (LEG_DOWN * LEG_ANGLE.cos() / SCALE))
             / (VIEWPORT_H / SCALE / 2.0),
         center_velocity.linvel.x * (VIEWPORT_W / SCALE / 2.0) / FPS,
         center_velocity.linvel.y * (VIEWPORT_H / SCALE / 2.0) / FPS,
@@ -813,29 +813,29 @@ fn game_post_physics_update(
         },
     ]);
 
-    match &game.next_post_update_call {
-        PostUpdateCall::GameReset => {
-            ev_reset.send(GameResetEvent {
+    match &env.next_post_update_call {
+        PostUpdateCall::EnvReset => {
+            ev_reset.send(EnvResetEvent {
                 initial_state: next_state,
             });
             commands.add(|world: &mut World| {
-                world.run_schedule(PostGameResetSchedule);
+                world.run_schedule(PostEnvResetSchedule);
             })
         }
-        PostUpdateCall::GameStep(action) => {
+        PostUpdateCall::EnvStep(action) => {
             let (reward, done) = {
                 if let Some(_) =
                     rapier_context
-                        .contact_pairs_with(game.center_id)
+                        .contact_pairs_with(env.center_id)
                         .find(|contact_pair| {
                             if contact_pair.has_any_active_contact() {
-                                let other_collider = if contact_pair.collider1() == game.center_id {
+                                let other_collider = if contact_pair.collider1() == env.center_id {
                                     contact_pair.collider2()
                                 } else {
                                     contact_pair.collider1()
                                 };
 
-                                if other_collider == game.ground_id {
+                                if other_collider == env.ground_id {
                                     return true;
                                 }
                             }
@@ -880,13 +880,13 @@ fn game_post_physics_update(
                         };
 
                         let fuel_penalty = m_power * 0.30 + s_power * 0.03;
-                        let delta_shaping = if let Some(prev_shaping) = game.prev_shaping {
+                        let delta_shaping = if let Some(prev_shaping) = env.prev_shaping {
                             shaping - prev_shaping
                         } else {
                             0.0
                         };
 
-                        game.prev_shaping = Some(shaping);
+                        env.prev_shaping = Some(shaping);
                         delta_shaping - fuel_penalty
                     };
 
@@ -901,14 +901,14 @@ fn game_post_physics_update(
             };
 
             if done {
-                game.is_finished = Some(result.clone())
+                env.is_finished = Some(result.clone())
             } else {
-                game.frame += 1;
+                env.frame += 1;
             }
 
             ev_step.send(result);
             commands.add(|world: &mut World| {
-                world.run_schedule(PostGameStepSchedule);
+                world.run_schedule(PostEnvStepSchedule);
             });
         }
     }

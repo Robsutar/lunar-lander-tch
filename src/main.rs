@@ -1,17 +1,18 @@
 mod agent;
 mod controller_ai;
 mod controller_human;
-mod game;
+mod environment;
+mod experience;
 mod graph;
 mod model;
 mod particle;
 mod util;
 
 use bevy::{prelude::*, window::WindowResolution};
-use game::*;
+use environment::*;
 use graph::GraphPlugin;
 
-pub const WINDOW_ZOOM: f32 = 2.0; // Affects only visually the scale of the window, adding zoom to camera.
+const WINDOW_ZOOM: f32 = 2.0; // Affects only visually the scale of the window, adding zoom to camera.
 
 fn main() {
     let human_controller = false;
@@ -26,17 +27,17 @@ fn main() {
         ..Default::default()
     }));
 
-    app.add_plugins(GamePlugin::default());
+    app.add_plugins(EnvironmentPlugin::default());
     app.add_plugins(GraphPlugin);
 
     if human_controller {
-        app.add_systems(PostGameResetSchedule, controller_human::game_post_reset);
-        app.add_systems(AvailableUpdateSchedule, controller_human::game_pre_step);
-        app.add_systems(PostGameStepSchedule, controller_human::game_post_step);
+        app.add_systems(PostEnvResetSchedule, controller_human::env_post_reset);
+        app.add_systems(AvailableUpdateSchedule, controller_human::env_pre_step);
+        app.add_systems(PostEnvStepSchedule, controller_human::env_post_step);
     } else {
-        app.add_systems(PostGameResetSchedule, controller_ai::game_post_reset);
-        app.add_systems(AvailableUpdateSchedule, controller_ai::game_pre_step);
-        app.add_systems(PostGameStepSchedule, controller_ai::game_post_step);
+        app.add_systems(PostEnvResetSchedule, controller_ai::env_post_reset);
+        app.add_systems(AvailableUpdateSchedule, controller_ai::env_pre_step);
+        app.add_systems(PostEnvStepSchedule, controller_ai::env_post_step);
     }
 
     app.add_systems(PostStartup, common_init);

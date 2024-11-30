@@ -1,12 +1,12 @@
-use crate::game::*;
+use crate::environment::*;
 use bevy::prelude::*;
 use rand::Rng;
 
-pub fn game_post_reset(mut ev_reset: ResMut<Events<GameResetEvent>>) {
+pub fn env_post_reset(mut ev_reset: ResMut<Events<EnvResetEvent>>) {
     let _state: State = ev_reset.drain().next().unwrap().initial_state;
 }
 
-pub fn game_pre_step(
+pub fn env_pre_step(
     mut commands: Commands,
     mut ev_step_action: EventWriter<Action>,
     keys: Res<ButtonInput<KeyCode>>,
@@ -33,13 +33,13 @@ pub fn game_pre_step(
         }
     };
 
-    Game::play_step(&mut commands, &mut ev_step_action, action);
+    Environment::play_step(&mut commands, &mut ev_step_action, action);
 }
 
-pub fn game_post_step(mut commands: Commands, mut ev_step_result: ResMut<Events<StepResultEvent>>) {
+pub fn env_post_step(mut commands: Commands, mut ev_step_result: ResMut<Events<StepResultEvent>>) {
     let (_next_state, _reward, done) = ev_step_result.drain().next().unwrap().unpack();
 
     if done {
-        Game::reset(&mut commands);
+        Environment::reset(&mut commands);
     }
 }

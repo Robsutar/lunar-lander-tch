@@ -3,7 +3,11 @@ use std::path::Path;
 use rand::{thread_rng, Rng};
 use tch::Tensor;
 
-use crate::{model::*, util::FixedVecDeque, Action, State};
+use crate::{
+    environment::{Action, State},
+    experience::*,
+    model::*,
+};
 
 /// Size of memory buffer.
 const MEMORY_SIZE: usize = 100_000;
@@ -24,7 +28,7 @@ const E_DECAY: f64 = 0.995;
 const E_MIN: f64 = 0.01;
 
 pub struct Agent {
-    memory_buffer: FixedVecDeque<Experience>,
+    memory_buffer: ExperienceReplayBuffer,
     trainer: QTrainer,
     epsilon: f64,
 }
@@ -32,7 +36,7 @@ pub struct Agent {
 impl Agent {
     pub fn load_if_exists(file_name: &str) -> Self {
         let mut exit = Self {
-            memory_buffer: FixedVecDeque::new(MEMORY_SIZE),
+            memory_buffer: ExperienceReplayBuffer::new(MEMORY_SIZE),
             trainer: QTrainer::new(ALPHA, GAMMA, TAU),
             epsilon: 1.0,
         };
@@ -56,24 +60,12 @@ impl Agent {
         self.trainer.save_q_network(file_name);
     }
 
-    pub fn append_experience(&mut self, experience: Experience) {
+    pub fn append_experience(&mut self, experience: &Experience) {
         self.memory_buffer.push(experience);
     }
 
     pub fn get_experiences(&self) -> Experiences {
-        if self.memory_buffer.len() < MINI_BATCH_SIZE {
-            panic!("There is no sufficient experiences to fill the MINI_BATCH_SIZE");
-        }
-
-        let mut mini_sample = ExperienceConcat::building(MINI_BATCH_SIZE);
-        let mut rng = thread_rng();
-        for index in rand::seq::index::sample(&mut rng, self.memory_buffer.len(), MINI_BATCH_SIZE)
-            .into_iter()
-        {
-            mini_sample.push(&self.memory_buffer.as_deque()[index]);
-        }
-
-        Experiences::from_concat(&mini_sample)
+        self.memory_buffer.sample(MINI_BATCH_SIZE)
     }
 
     pub fn get_action(&self, state: &State) -> Action {
@@ -93,7 +85,7 @@ impl Agent {
     }
 
     pub fn check_update_conditions(&self, time_step: usize) -> bool {
-        (time_step + 1) % NUM_STEPS_FOR_UPDATE == 0 && self.memory_buffer.len() > MINI_BATCH_SIZE
+        (time_step + 1) % NUM_STEPS_FOR_UPDATE == 0 && self.memory_buffer.size() > MINI_BATCH_SIZE
     }
 
     pub fn decay_epsilon(&mut self) {

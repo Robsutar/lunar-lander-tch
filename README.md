@@ -19,3 +19,6 @@ There is an human-controller implementation, for this lunar lander game, to enab
 -    let human_controller = false;
 +    let human_controller = true;
 ```
+
+#### Versions
+- [Version 1.1.0](https://github.com/Robsutar/lunar-lander-tch/tree/v1.1.0): Lunar Lander environment creation, DQN network implementation, with replay buffers, soft updates, and more base fundamentals for Deep Q-Networks.

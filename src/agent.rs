@@ -34,30 +34,47 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn load_if_exists(file_name: &str) -> Self {
+    pub fn load_if_exists(name: &str) -> Self {
         let mut exit = Self {
             memory_buffer: ExperienceReplayBuffer::new(MEMORY_SIZE),
             trainer: QTrainer::new(ALPHA, GAMMA, TAU),
             epsilon: 1.0,
         };
 
-        let file_name = Path::new("./model").join(file_name);
-        if file_name.exists() {
-            exit.trainer.load_in_q_network(file_name);
+        let model_file = Path::new("./model").join(name.to_owned() + ".ot");
+        if model_file.exists() {
+            exit.trainer.load_in_q_network(model_file);
         }
         exit.trainer.fill_q_network_in_target();
+
+        let agent_file = Path::new("./model").join(name.to_owned() + ".json");
+        if agent_file.exists() {
+            let data: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(agent_file).unwrap()).unwrap();
+
+            exit.epsilon = data["epsilon"].as_f64().unwrap();
+        }
 
         exit
     }
 
-    pub fn save(&self, file_name: &str) {
-        let model_folder_path = Path::new("./model");
-        if !model_folder_path.exists() {
-            std::fs::create_dir(model_folder_path).unwrap();
+    pub fn save(&self, name: &str) {
+        let folder_path = Path::new("./model");
+        if !folder_path.exists() {
+            std::fs::create_dir(folder_path).unwrap();
         }
 
-        let file_name = model_folder_path.join(file_name);
-        self.trainer.save_q_network(file_name);
+        let model_file = folder_path.join(name.to_owned() + ".ot");
+        self.trainer.save_q_network(model_file);
+
+        let agent_file = folder_path.join(name.to_owned() + ".json");
+        let mut json = serde_json::Value::Object(serde_json::Map::new());
+        let json_map = json.as_object_mut().unwrap();
+        json_map.insert(
+            "epsilon".to_string(),
+            serde_json::Value::Number(serde_json::Number::from_f64(self.epsilon).unwrap()),
+        );
+        std::fs::write(agent_file, serde_json::to_string_pretty(&json).unwrap()).unwrap();
     }
 
     pub fn append_experience(&mut self, experience: &Experience) {

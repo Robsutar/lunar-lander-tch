@@ -33,14 +33,14 @@ pub fn env_post_reset(
             // Update the ε value
             holder.agent().decay_epsilon();
 
-            holder.agent().save("model.ot");
+            holder.agent().save("model");
         }
         None => {
             commands.insert_resource(EnvHolder {
                 action: Action::Nothing,
                 state,
 
-                agent: Mutex::new(Agent::load_if_exists("model.ot")),
+                agent: Mutex::new(Agent::load_if_exists("model")),
             });
         }
     }

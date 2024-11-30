@@ -34,29 +34,29 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn load_if_exists(file_name: &str) -> Self {
+    pub fn load_if_exists(name: &str) -> Self {
         let mut exit = Self {
             memory_buffer: ExperienceReplayBuffer::new(MEMORY_SIZE),
             trainer: QTrainer::new(ALPHA, GAMMA, TAU),
             epsilon: 1.0,
         };
 
-        let file_name = Path::new("./model").join(file_name);
-        if file_name.exists() {
-            exit.trainer.load_in_q_network(file_name);
+        let model_file = Path::new("./model").join(name.to_owned() + ".ot");
+        if model_file.exists() {
+            exit.trainer.load_in_q_network(model_file);
         }
         exit.trainer.fill_q_network_in_target();
 
         exit
     }
 
-    pub fn save(&self, file_name: &str) {
+    pub fn save(&self, name: &str) {
         let model_folder_path = Path::new("./model");
         if !model_folder_path.exists() {
             std::fs::create_dir(model_folder_path).unwrap();
         }
 
-        let file_name = model_folder_path.join(file_name);
+        let file_name = model_folder_path.join(name.to_owned() + ".ot");
         self.trainer.save_q_network(file_name);
     }
 

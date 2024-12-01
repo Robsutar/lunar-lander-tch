@@ -34,6 +34,10 @@ pub struct Agent {
 }
 
 impl Agent {
+    /// Loads the online_q_network (then clone it to target_q_network) if the file "model/`name`.ot"
+    /// exists.
+    ///
+    /// Loads the agent properties, like the epsilon, if the file "model/`name`.json" exists.
     pub fn load_if_exists(name: &str) -> Self {
         let mut exit = Self {
             memory_buffer: ExperienceReplayBuffer::new(MEMORY_SIZE),
@@ -58,6 +62,9 @@ impl Agent {
         exit
     }
 
+    /// Saves the online_q_network model in "model/`name`.ot", and the agent properties. like the
+    /// epsilon in "model/`name`.json". Then [`Agent::load_if_exists`] can be used to load both
+    /// files using the same `name` in function.
     pub fn save(&self, name: &str) {
         let folder_path = Path::new("./model");
         if !folder_path.exists() {

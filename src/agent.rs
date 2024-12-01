@@ -84,14 +84,25 @@ impl Agent {
         std::fs::write(agent_file, serde_json::to_string_pretty(&json).unwrap()).unwrap();
     }
 
+    /// Inserts an experience in the memory buffer used for experience replay.
+    ///
+    /// See [`ExperienceReplayBuffer::push`].
     pub fn append_experience(&mut self, experience: &Experience) {
         self.memory_buffer.push(experience);
     }
 
+    /// Samples experiences from the memory buffer with [`MINI_BATCH_SIZE`].
+    ///
+    /// # Panics
+    /// If the buffer has less elements than [`MINI_BATCH_SIZE`].
     pub fn get_experiences(&self) -> Experiences {
         self.memory_buffer.sample(MINI_BATCH_SIZE)
     }
 
+    /// Decide whether to take a random action or use the online_q_network to find the best action.
+    ///
+    /// The higher the epsilon of this agent, the greater the chance of a random action being chosen,
+    /// this is also called as exploration/exploitation policy.
     pub fn get_action(&self, state: &State) -> Action {
         let mut rng = thread_rng();
 
@@ -108,14 +119,21 @@ impl Agent {
         return final_move;
     }
 
+    /// Returns if good conditions to use [`Agent::learn`] with the values of [`Agent::get_experiences`]
+    /// are available.
     pub fn check_update_conditions(&self, time_step: usize) -> bool {
         (time_step + 1) % NUM_STEPS_FOR_UPDATE == 0 && self.memory_buffer.size() > MINI_BATCH_SIZE
     }
 
+    /// Reduces the epsilon of the agent with agent hyperparameters.
+    ///
+    /// Epsilon is used to chose between exploration and exploitation, see [`Agent::get_action`].
     pub fn decay_epsilon(&mut self) {
         self.epsilon = E_MIN.max(E_DECAY * self.epsilon);
     }
 
+    /// Uses `experiences` to adjust the model network parameters, computing loss them use backwards
+    /// propagation. Then, the target_q_network is updated with soft updates.
     pub fn learn(&mut self, experiences: &Experiences) {
         self.trainer.agent_learn(experiences);
     }

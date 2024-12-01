@@ -45,7 +45,7 @@ impl Agent {
         if model_file.exists() {
             exit.trainer.load_in_q_network(model_file);
         }
-        exit.trainer.fill_q_network_in_target();
+        exit.trainer.fill_online_network_in_target();
 
         let agent_file = Path::new("./model").join(name.to_owned() + ".json");
         if agent_file.exists() {
@@ -65,7 +65,7 @@ impl Agent {
         }
 
         let model_file = folder_path.join(name.to_owned() + ".ot");
-        self.trainer.save_q_network(model_file);
+        self.trainer.save_online_q_network(model_file);
 
         let agent_file = folder_path.join(name.to_owned() + ".json");
         let mut json = serde_json::Value::Object(serde_json::Map::new());

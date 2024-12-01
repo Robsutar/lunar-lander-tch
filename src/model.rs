@@ -103,12 +103,12 @@ impl DDqnTrainer {
     }
 
     /// Copies the data from online_q_network var store to target_q_network.
-    pub fn fill_q_network_in_target(&mut self) {
+    pub fn fill_online_network_in_target(&mut self) {
         self.target_q_vs.copy(&self.online_q_vs).unwrap();
     }
 
     /// Saves the online_q_network var store in path.
-    pub fn save_q_network<T: AsRef<std::path::Path>>(&self, path: T) {
+    pub fn save_online_q_network<T: AsRef<std::path::Path>>(&self, path: T) {
         self.online_q_vs.save(path).unwrap();
     }
 

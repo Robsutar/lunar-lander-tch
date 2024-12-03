@@ -95,21 +95,31 @@ impl Module for DeepQNet {
         let advantage = self.advantage_stream.forward(&x);
 
         // Normalize the advantage by subtracting its mean across actions.
-        let advantage_mean = advantage.mean_dim(1, true, Kind::Float);
+        let advantage_mean = if xs.size().len() == 1 {
+            advantage.mean(Kind::Float)
+        } else {
+            advantage.mean_dim(1, true, Kind::Float)
+        };
 
         // Combine Value and Advantage to compute Q(s, a).
         value + advantage - advantage_mean
     }
 }
 
-/// Represents a trainer for Double Deep Q-Network (D-DQN) algorithms.
+/// Represents a trainer for Double Deep Q-Network (D-DQN) algorithms with Dueling Architecture.
 ///
-/// It utilizes two separate neural networks: the online Q-network (online_q_network) and the
-/// target Q-network (target_q_network).
+/// This trainer uses the Dueling Deep Q-Network (`DeepQNet`) model, which separates the Q-value
+/// calculation into two streams: Value (V(s)) and Advantage (A(s, a)). This allows the network
+/// to better distinguish between state values and action advantages.
 ///
-/// Tn comparison with the standard DQN, the use of two networks helps stabilize training by
-/// providing a stable, target for Q-value estimates, while reduces overestimations that is common
-/// in standard DQNs.
+/// The trainer includes two networks:
+/// 1. **Online Q-Network**: Trained to approximate Q-values for current states and actions.
+/// 2. **Target Q-Network**: Provides stable Q-value estimates for training, reducing overestimation.
+///
+/// This trainer maintains all functionalities of Double DQN, including:
+/// - Action selection based on the online Q-network.
+/// - Action evaluation based on the target Q-network.
+/// - Soft updates for the target network's parameters.
 pub struct DDqnTrainer {
     // The online Q-network trained to estimate action-values
     online_q_network: DeepQNet,

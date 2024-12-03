@@ -1,4 +1,4 @@
-use tch::nn::{self, Adam, Linear, Module, Optimizer, OptimizerConfig, VarStore};
+use tch::nn::{self, Adam, Module, Optimizer, OptimizerConfig, Sequential, VarStore};
 use tch::{Kind, Tensor};
 
 use crate::{
@@ -6,61 +6,120 @@ use crate::{
     experience::*,
 };
 
-/// A neural network model designed for Deep Q-Network (DQN) algorithms.
+/// A neural network for Dueling Deep Q-Network (Dueling DQN).
 ///
-/// The network is used to approximate the Q-value function, which predicts the expected cumulative reward
-/// for taking a given action in a given state. The goal of this network is to map input states to Q-values
-/// for each possible action, guiding the agent's decision-making process.
+/// This architecture splits the Q-value estimation into two streams:
+/// 1. **Value stream**: Estimates the value of being in a given state, independent of the action taken.
+/// 2. **Advantage stream**: Estimates the relative benefit (advantage) of each action in the current state.
 ///
-/// The network's output corresponds to the Q-values for all actions in the action space,
-/// and during training, the network minimizes the mean squared error between the predicted Q-values and
-/// the target Q-values derived from the Bellman equation. This process helps the agent learn which actions
-/// lead to the highest long-term rewards.
+/// The Q-value for each action is then calculated as:
+/// Q(s, a) = V(s) + A(s, a) - mean(A(s, a')),
+/// where mean(A(s, a')) normalizes the advantage across all actions.
 ///
-/// The network is trained using experience tuples collected from the environment, with the aim of improving
-/// the agent's policy over time by learning the optimal Q-value function.
+/// This approach improves stability and allows the network to more effectively learn which states are valuable,
+/// even if the actions available have similar advantages.
 #[derive(Debug)]
 pub struct DeepQNet {
-    /// This layer receives the input data, with the input size, and output values with next the hidden layer size.
-    input: Linear,
-    /// This layer receives the output data from the previous layer, and output values with the next layer size.
-    hidden1: Linear,
-    /// This layer receives the output data from the previous layer, and output values with the output size.
-    output: Linear,
+    /// Shared layers for extracting features from the input state.
+    shared_layer: Sequential,
+    /// Stream responsible for estimating the value of the state (V(s)).
+    value_stream: Sequential,
+    /// Stream responsible for estimating the advantage of actions (A(s, a)).
+    advantage_stream: Sequential,
 }
 impl DeepQNet {
     pub fn new(vs: &VarStore) -> Self {
         let input_size = State::SIZE as i64;
         let output_size = Action::SIZE as i64;
-        let input = nn::linear(&vs.root() / "input", input_size, 64, Default::default());
-        let hidden1 = nn::linear(&vs.root() / "hidden1", 64, 64, Default::default());
-        let output = nn::linear(&vs.root() / "output", 64, output_size, Default::default());
 
         Self {
-            input,
-            hidden1,
-            output,
+            shared_layer: nn::seq()
+                .add(nn::linear(
+                    &vs.root() / "shared_fc1",
+                    input_size,
+                    128,
+                    Default::default(),
+                ))
+                .add_fn(|xs| xs.relu())
+                .add(nn::linear(
+                    &vs.root() / "shared_fc2",
+                    128,
+                    128,
+                    Default::default(),
+                ))
+                .add_fn(|xs| xs.relu()),
+
+            value_stream: nn::seq()
+                .add(nn::linear(
+                    &vs.root() / "value_fc1",
+                    128,
+                    128,
+                    Default::default(),
+                ))
+                .add_fn(|xs| xs.relu())
+                .add(nn::linear(
+                    &vs.root() / "value_fc2",
+                    128,
+                    1,
+                    Default::default(),
+                )),
+
+            advantage_stream: nn::seq()
+                .add(nn::linear(
+                    &vs.root() / "advantage_fc1",
+                    128,
+                    128,
+                    Default::default(),
+                ))
+                .add_fn(|xs| xs.relu())
+                .add(nn::linear(
+                    &vs.root() / "advantage_fc2",
+                    128,
+                    output_size,
+                    Default::default(),
+                )),
         }
     }
 }
 impl Module for DeepQNet {
+    /// # Returns
+    /// A tensor representing the Q-values for each action in the input state(s).
     fn forward(&self, xs: &Tensor) -> Tensor {
-        xs.apply(&self.input)
-            .relu()
-            .apply(&self.hidden1)
-            .relu()
-            .apply(&self.output)
+        // Shared layers: Extract state features.
+        let x = self.shared_layer.forward(xs);
+
+        // Value stream: Estimate the state value V(s).
+        let value = self.value_stream.forward(&x);
+
+        // Advantage stream: Estimate the advantage of each action A(s, a).
+        let advantage = self.advantage_stream.forward(&x);
+
+        // Normalize the advantage by subtracting its mean across actions.
+        let advantage_mean = if xs.size().len() == 1 {
+            advantage.mean(Kind::Float)
+        } else {
+            advantage.mean_dim(1, true, Kind::Float)
+        };
+
+        // Combine Value and Advantage to compute Q(s, a).
+        value + advantage - advantage_mean
     }
 }
 
-/// Represents a trainer for Double Deep Q-Network (D-DQN) algorithms.
+/// Represents a trainer for Double Deep Q-Network (D-DQN) algorithms with Dueling Architecture.
 ///
-/// It utilizes two separate neural networks: the online Q-network (online_q_network) and the
-/// target Q-network (target_q_network).
+/// This trainer uses the Dueling Deep Q-Network (`DeepQNet`) model, which separates the Q-value
+/// calculation into two streams: Value (V(s)) and Advantage (A(s, a)). This allows the network
+/// to better distinguish between state values and action advantages.
 ///
-/// Tn comparison with the standard DQN, the use of two networks helps stabilize training by
-/// providing a stable, target for Q-value estimates, while reduces overestimations that is common
-/// in standard DQNs.
+/// The trainer includes two networks:
+/// 1. **Online Q-Network**: Trained to approximate Q-values for current states and actions.
+/// 2. **Target Q-Network**: Provides stable Q-value estimates for training, reducing overestimation.
+///
+/// This trainer maintains all functionalities of Double DQN, including:
+/// - Action selection based on the online Q-network.
+/// - Action evaluation based on the target Q-network.
+/// - Soft updates for the target network's parameters.
 pub struct DDqnTrainer {
     // The online Q-network trained to estimate action-values
     online_q_network: DeepQNet,

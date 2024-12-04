@@ -83,12 +83,7 @@ pub fn env_post_step(
     let update = holder.agent().check_update_conditions(env.frame());
 
     if update {
-        // Sample random mini-batch of experience tuples (S,A,R,S') from D
-        let experiences = holder.agent().get_experiences();
-
-        // Set the y targets, perform a gradient descent step,
-        // and update the network weights.
-        holder.agent().learn(&experiences);
+        holder.agent().learn();
     }
 
     holder.state = next_state;

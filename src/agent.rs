@@ -135,7 +135,12 @@ impl Agent {
 
     /// Uses `experiences` to adjust the model network parameters, computing loss them use backwards
     /// propagation. Then, the target_q_network is updated with soft updates.
-    pub fn learn(&mut self, experiences: &Experiences) {
-        self.trainer.agent_learn(experiences);
+    pub fn learn(&mut self) {
+        // Sample random mini-batch of experience tuples (S,A,R,S') from D
+        let experiences = self.get_experiences();
+
+        // Set the y targets, perform a gradient descent step,
+        // and update the network weights.
+        self.trainer.agent_learn(&experiences);
     }
 }

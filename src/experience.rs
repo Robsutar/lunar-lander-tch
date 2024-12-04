@@ -26,8 +26,8 @@ pub struct Experience {
     pub done: bool,
 }
 
-/// Prioritized experience replay buffer.
-pub struct ExperienceReplayBuffer {
+/// Prioritized [`Experience`] replay buffer.
+pub struct ReplayBuffer {
     /// Shape: (capacity, State::SIZE)
     states: Tensor,
     /// Shape: (capacity, 1)
@@ -50,7 +50,7 @@ pub struct ExperienceReplayBuffer {
     priority_min: Vec<f32>,
 }
 
-impl ExperienceReplayBuffer {
+impl ReplayBuffer {
     pub fn new(capacity: usize, alpha: f32) -> Self {
         let state_size_i64 = State::SIZE as i64;
         let capacity_i64 = capacity as i64;

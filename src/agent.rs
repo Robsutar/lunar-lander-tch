@@ -29,7 +29,7 @@ const E_MIN: f64 = 0.01;
 
 /// Used to train the model trainer (DDqnTrainer), with experience replay and ε-greedy policy.
 pub struct Agent {
-    memory_buffer: ExperienceReplayBuffer,
+    memory_buffer: ReplayBuffer,
     trainer: DDqnTrainer,
     epsilon: f64,
 }
@@ -41,7 +41,7 @@ impl Agent {
     /// Loads the agent properties, like the epsilon, if the file "model/`name`.json" exists.
     pub fn load_if_exists(name: &str) -> Self {
         let mut exit = Self {
-            memory_buffer: ExperienceReplayBuffer::new(MEMORY_SIZE, 0.6),
+            memory_buffer: ReplayBuffer::new(MEMORY_SIZE, 0.6),
             trainer: DDqnTrainer::new(ALPHA, GAMMA, TAU),
             epsilon: 1.0,
         };

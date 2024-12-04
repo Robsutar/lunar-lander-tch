@@ -176,18 +176,18 @@ impl DDqnTrainer {
         self.online_q_network.forward(&xs.to(DEVICE))
     }
 
-    /// Calculates the loss.
+    /// Calculates the loss and TD errors.
     ///
     /// # Returns
-    /// loss: Tensor(size=[]) the Mean-Squared Error between
-    /// the y targets and the Q(s,a) values.
-    fn compute_loss(&self, experiences: &Experiences) -> Tensor {
+    /// - `loss`: Tensor of shape `[]` representing the mean loss.
+    /// - `td_errors`: Tensor of shape `[batch_size, 1]` representing the TD errors for each sample.
+    pub fn compute_loss(&self, experiences: &PrioritizedExperiences) -> (Tensor, Tensor) {
         // Unpack the mini-batch of experience tuples
-        let (states, actions, rewards, next_states, done_values) = experiences.unpack();
+        let (states, actions, rewards, next_states, done_values) = experiences.experiences.unpack();
 
-        // Action Selection: Get the best actions for next_states from the local network
-        let next_q_values_local = self.online_q_network.forward(&next_states);
-        let (_, best_actions) = next_q_values_local.max_dim(1, true); // Indices of best actions
+        // Action Selection: Get the best actions for next_states from the online network
+        let next_q_values_online = self.online_q_network.forward(&next_states);
+        let (_, best_actions) = next_q_values_online.max_dim(1, true); // Indices of best actions
 
         // Action Evaluation: Get Q-values from the target network for the best actions
         let next_q_values_target = self.target_q_network.forward(&next_states);
@@ -200,24 +200,28 @@ impl DDqnTrainer {
         let q_values = self.online_q_network.forward(&states);
         let q_values = q_values.gather(1, &actions.to_kind(Kind::Int64), false);
 
-        // Compute the loss
-        let loss = q_values.mse_loss(&y_targets, tch::Reduction::Mean);
+        // Compute TD errors: δ = y_targets - Q(s,a)
+        let td_errors = y_targets - q_values;
 
-        loss
+        // Apply importance-sampling weights
+        let weights = &experiences.weights;
+        let mut weighted_td_errors: Tensor = weights * &td_errors;
+
+        // Compute the loss: Mean squared error with importance-sampling weights
+        let loss = weighted_td_errors.pow_(2).mean(Kind::Float);
+
+        (loss, td_errors)
     }
 
     /// Updates the weights of the Q networks.
-    pub fn agent_learn(&mut self, experiences: &Experiences) {
-        // Calculate the loss
-        let loss = self.compute_loss(&experiences);
-
+    pub fn agent_learn(&mut self, loss: Tensor) {
         self.online_q_optimizer.zero_grad();
         // Compute gradients of the loss with respect to the weights
         loss.backward();
         // Update the weights of the online_q_network.
         self.online_q_optimizer.step();
 
-        // Update the weights of target online_q_network using soft update.
+        // Update the weights of target_q_network using soft update.
         tch::no_grad(|| {
             for (target_params, q_net_params) in self
                 .target_q_vs

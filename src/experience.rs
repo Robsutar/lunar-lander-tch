@@ -1,4 +1,4 @@
-use rand::seq::SliceRandom;
+use rand::Rng;
 use tch::{Device, Kind, Tensor};
 
 use crate::environment::{Action, State};
@@ -175,29 +175,68 @@ impl ExperienceReplayBuffer {
         idx - (self.capacity - 1)
     }
 
+    /// Samples experiences based on their priorities.
+    ///
+    /// Returns the sampled experiences along with importance-sampling weights and indices.
+    pub fn sample(&self, batch_size: usize, beta: f32) -> PrioritizedExperiences {
         if self.size < batch_size {
             panic!(
-                "Not enough experiences in the buffer to sample a batch with size {batch_size}."
+                "Not enough experiences in the buffer to sample a batch with size {}.",
+                batch_size
             );
         }
 
         let mut rng = rand::thread_rng();
-        let indices = Tensor::from_slice(
-            &(0..self.size as i64)
-                .collect::<Vec<_>>()
-                .choose_multiple(&mut rng, batch_size)
-                .cloned()
-                .collect::<Vec<_>>(),
-        )
-        .to(DEVICE)
-        .to_kind(Kind::Int64);
+        let mut indices = Vec::with_capacity(batch_size);
 
-        Experiences {
-            states: self.states.index_select(0, &indices),
-            actions: self.actions.index_select(0, &indices),
-            rewards: self.rewards.index_select(0, &indices),
-            next_states: self.next_states.index_select(0, &indices),
-            done_values: self.done_values.index_select(0, &indices),
+        let total_priority = self.sum();
+
+        for _ in 0..batch_size {
+            let p = rng.gen_range(0.0..total_priority);
+            let idx = self.find_prefix_sum_idx(p);
+            indices.push(idx);
+        }
+
+        // Compute importance-sampling weights
+        let prob_min = self.min() / total_priority;
+        let max_weight = (prob_min * self.size as f32).powf(-beta);
+
+        let mut weights_vec = Vec::with_capacity(batch_size);
+
+        for &idx in &indices {
+            let idx_in_tree = idx + self.capacity - 1;
+            let priority = self.priority_sum[idx_in_tree];
+            let prob = priority / total_priority;
+            let weight = (prob * self.size as f32).powf(-beta);
+            weights_vec.push(weight / max_weight);
+        }
+
+        let weights = Tensor::from_slice(&weights_vec).unsqueeze(1).to(DEVICE);
+
+        let indices_tensor =
+            Tensor::from_slice(&indices.iter().map(|&i| i as i64).collect::<Vec<_>>()).to(DEVICE);
+
+        let experiences = Experiences {
+            states: self.states.index_select(0, &indices_tensor),
+            actions: self.actions.index_select(0, &indices_tensor),
+            rewards: self.rewards.index_select(0, &indices_tensor),
+            next_states: self.next_states.index_select(0, &indices_tensor),
+            done_values: self.done_values.index_select(0, &indices_tensor),
+        };
+
+        PrioritizedExperiences {
+            experiences,
+            weights,
+            indices,
+        }
+    }
+
+    /// Updates the priorities of sampled experiences.
+    pub fn update_priorities(&mut self, indices: &[usize], priorities: &[f32]) {
+        for (&idx, &priority) in indices.iter().zip(priorities.iter()) {
+            self.max_priority = self.max_priority.max(priority);
+            let priority_alpha = priority.powf(self.alpha);
+            self.set_priority(idx, priority_alpha);
         }
     }
 }

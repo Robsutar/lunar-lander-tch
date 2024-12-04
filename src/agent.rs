@@ -98,6 +98,14 @@ impl Agent {
         std::fs::write(agent_file, serde_json::to_string_pretty(&json).unwrap()).unwrap();
     }
 
+    pub fn number_of_episodes(&self) -> i32 {
+        self.number_of_episodes
+    }
+
+    pub fn number_of_trainings(&self) -> i32 {
+        self.number_of_trainings
+    }
+
     /// Inserts an experience in the memory buffer used for experience replay.
     ///
     /// See [`ExperienceReplayBuffer::push`].

@@ -29,6 +29,13 @@ const E_MIN: f64 = 0.01;
 /// Initial ε value for the ε-greedy policy.
 const E_START: f64 = 1.0;
 
+/// Target number of total episodes, used to calculate replay buffer beta.
+const EPISODES_MAX: i32 = 400;
+/// Initial value for replay buffer beta.
+const REPLAY_BETA_START: f32 = 0.4;
+/// Max value for replay buffer beta.
+const REPLAY_BETA_MAX: f32 = 1.0;
+
 /// Used to train the model trainer (DDqnTrainer), with experience replay and ε-greedy policy.
 pub struct Agent {
     replay_buffer: ReplayBuffer,
@@ -152,11 +159,30 @@ impl Agent {
         epsilon_n.max(E_MIN)
     }
 
+    /// Replay buffer beta is used to adjust the degree of correction for bias introduced by
+    /// prioritization in agent training. See [`Agent::learn`].
+    ///
+    /// # Returns
+    /// Replay buffer beta based on [`Agent#number_of_episodes`].
+    fn compute_replay_buffer_beta(&self) -> f32 {
+        if self.number_of_episodes <= 0 {
+            REPLAY_BETA_START
+        } else if self.number_of_episodes >= EPISODES_MAX {
+            REPLAY_BETA_MAX
+        } else {
+            REPLAY_BETA_START
+                + (REPLAY_BETA_MAX - REPLAY_BETA_START)
+                    * (self.number_of_episodes as f32 / EPISODES_MAX as f32)
+        }
+    }
+
     /// Uses `experiences` to adjust the model network parameters, computing loss them use backwards
     /// propagation. Then, the target_q_network is updated with soft updates.
     pub fn learn(&mut self) {
         // Sample random mini-batch of experience tuples (S,A,R,S') from D
-        let experiences = self.replay_buffer.sample(MINI_BATCH_SIZE, 0.4);
+        let experiences = self
+            .replay_buffer
+            .sample(MINI_BATCH_SIZE, self.compute_replay_buffer_beta());
 
         // Calculate the loss and TD errors
         let (loss, td_errors) = self.trainer.compute_loss(&experiences);

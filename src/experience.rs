@@ -155,3 +155,13 @@ impl Experiences {
         )
     }
 }
+
+/// Experiences with priorities and importance-sampling weights.
+pub struct PrioritizedExperiences {
+    /// Experiences batch.
+    pub experiences: Experiences,
+    /// Importance-sampling weights.
+    pub weights: Tensor,
+    /// Indices of sampled experiences.
+    pub indices: Vec<usize>,
+}

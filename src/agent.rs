@@ -1,10 +1,10 @@
 use std::path::Path;
 
 use rand::{thread_rng, Rng};
-use tch::Tensor;
+use tch::{Device, Tensor};
 
 use crate::{
-    environment::{Action, State},
+    environment::{Action, Environment, State},
     experience::*,
     model::*,
 };
@@ -26,12 +26,22 @@ const TAU: f64 = 0.001;
 const E_DECAY: f64 = 0.995;
 /// Minimum ε value for the ε-greedy policy.
 const E_MIN: f64 = 0.01;
+/// Initial ε value for the ε-greedy policy.
+const E_START: f64 = 1.0;
+
+/// Target number of total episodes, used to calculate replay buffer beta.
+const EPISODES_MAX: i32 = 400;
+/// Initial value for replay buffer beta.
+const REPLAY_BETA_START: f32 = 0.4;
+/// Max value for replay buffer beta.
+const REPLAY_BETA_MAX: f32 = 1.0;
 
 /// Used to train the model trainer (DDqnTrainer), with experience replay and ε-greedy policy.
 pub struct Agent {
-    memory_buffer: ExperienceReplayBuffer,
+    replay_buffer: ReplayBuffer,
     trainer: DDqnTrainer,
-    epsilon: f64,
+    number_of_episodes: i32,
+    number_of_trainings: i32,
 }
 
 impl Agent {
@@ -41,9 +51,10 @@ impl Agent {
     /// Loads the agent properties, like the epsilon, if the file "model/`name`.json" exists.
     pub fn load_if_exists(name: &str) -> Self {
         let mut exit = Self {
-            memory_buffer: ExperienceReplayBuffer::new(MEMORY_SIZE),
+            replay_buffer: ReplayBuffer::new(MEMORY_SIZE, 0.6),
             trainer: DDqnTrainer::new(ALPHA, GAMMA, TAU),
-            epsilon: 1.0,
+            number_of_episodes: 0,
+            number_of_trainings: 0,
         };
 
         let model_file = Path::new("./model").join(name.to_owned() + ".ot");
@@ -57,7 +68,8 @@ impl Agent {
             let data: serde_json::Value =
                 serde_json::from_str(&std::fs::read_to_string(agent_file).unwrap()).unwrap();
 
-            exit.epsilon = data["epsilon"].as_f64().unwrap();
+            exit.number_of_episodes = data["number_of_episodes"].as_f64().unwrap() as i32;
+            exit.number_of_trainings = data["number_of_trainings"].as_f64().unwrap() as i32;
         }
 
         exit
@@ -79,25 +91,37 @@ impl Agent {
         let mut json = serde_json::Value::Object(serde_json::Map::new());
         let json_map = json.as_object_mut().unwrap();
         json_map.insert(
-            "epsilon".to_string(),
-            serde_json::Value::Number(serde_json::Number::from_f64(self.epsilon).unwrap()),
+            "number_of_episodes".to_string(),
+            serde_json::Value::Number(
+                serde_json::Number::from_f64(self.number_of_episodes as f64).unwrap(),
+            ),
+        );
+        json_map.insert(
+            "number_of_trainings".to_string(),
+            serde_json::Value::Number(
+                serde_json::Number::from_f64(self.number_of_trainings as f64).unwrap(),
+            ),
         );
         std::fs::write(agent_file, serde_json::to_string_pretty(&json).unwrap()).unwrap();
+    }
+
+    pub fn number_of_episodes(&self) -> i32 {
+        self.number_of_episodes
+    }
+
+    pub fn number_of_trainings(&self) -> i32 {
+        self.number_of_trainings
     }
 
     /// Inserts an experience in the memory buffer used for experience replay.
     ///
     /// See [`ExperienceReplayBuffer::push`].
     pub fn append_experience(&mut self, experience: &Experience) {
-        self.memory_buffer.push(experience);
+        self.replay_buffer.push(experience);
     }
 
-    /// Samples experiences from the memory buffer with [`MINI_BATCH_SIZE`].
-    ///
-    /// # Panics
-    /// If the buffer has less elements than [`MINI_BATCH_SIZE`].
-    pub fn get_experiences(&self) -> Experiences {
-        self.memory_buffer.sample(MINI_BATCH_SIZE)
+    pub fn append_done_env(&mut self, _env: &Environment) {
+        self.number_of_episodes += 1;
     }
 
     /// Decide whether to take a random action or use the online_q_network to find the best action.
@@ -107,7 +131,7 @@ impl Agent {
     pub fn get_action(&self, state: &State) -> Action {
         let mut rng = thread_rng();
 
-        let final_move = if rng.gen_range(0.0..1.0) > self.epsilon {
+        let final_move = if rng.gen_range(0.0..1.0) > self.compute_epsilon() {
             let state = Tensor::from_slice(&state.0);
             let prediction = self.trainer.online_q_forward(&state);
             let target_move = prediction.argmax(0, false).int64_value(&[]);
@@ -123,19 +147,58 @@ impl Agent {
     /// Returns if good conditions to use [`Agent::learn`] with the values of [`Agent::get_experiences`]
     /// are available.
     pub fn check_update_conditions(&self, time_step: usize) -> bool {
-        (time_step + 1) % NUM_STEPS_FOR_UPDATE == 0 && self.memory_buffer.size() > MINI_BATCH_SIZE
+        (time_step + 1) % NUM_STEPS_FOR_UPDATE == 0 && self.replay_buffer.size() > MINI_BATCH_SIZE
     }
 
-    /// Reduces the epsilon of the agent with agent hyperparameters.
-    ///
     /// Epsilon is used to chose between exploration and exploitation, see [`Agent::get_action`].
-    pub fn decay_epsilon(&mut self) {
-        self.epsilon = E_MIN.max(E_DECAY * self.epsilon);
+    ///
+    /// # Returns
+    /// Epsilon based on [`Agent#number_of_episodes`].
+    fn compute_epsilon(&self) -> f64 {
+        let epsilon_n = E_DECAY.powi(self.number_of_episodes) * E_START;
+        epsilon_n.max(E_MIN)
+    }
+
+    /// Replay buffer beta is used to adjust the degree of correction for bias introduced by
+    /// prioritization in agent training. See [`Agent::learn`].
+    ///
+    /// # Returns
+    /// Replay buffer beta based on [`Agent#number_of_episodes`].
+    fn compute_replay_buffer_beta(&self) -> f32 {
+        if self.number_of_episodes <= 0 {
+            REPLAY_BETA_START
+        } else if self.number_of_episodes >= EPISODES_MAX {
+            REPLAY_BETA_MAX
+        } else {
+            REPLAY_BETA_START
+                + (REPLAY_BETA_MAX - REPLAY_BETA_START)
+                    * (self.number_of_episodes as f32 / EPISODES_MAX as f32)
+        }
     }
 
     /// Uses `experiences` to adjust the model network parameters, computing loss them use backwards
     /// propagation. Then, the target_q_network is updated with soft updates.
-    pub fn learn(&mut self, experiences: &Experiences) {
-        self.trainer.agent_learn(experiences);
+    pub fn learn(&mut self) {
+        // Sample random mini-batch of experience tuples (S,A,R,S') from D
+        let experiences = self
+            .replay_buffer
+            .sample(MINI_BATCH_SIZE, self.compute_replay_buffer_beta());
+
+        // Calculate the loss and TD errors
+        let (loss, td_errors) = self.trainer.compute_loss(&experiences);
+
+        // Set the y targets, perform a gradient descent step,
+        // and update the network weights.
+        self.trainer.agent_learn(loss);
+
+        // Update priorities in the replay buffer
+        let td_errors_abs = td_errors.detach().abs().squeeze().to(Device::Cpu);
+        let td_errors_vec = Vec::<f32>::try_from(&td_errors_abs).unwrap();
+
+        // Update priorities in the buffer
+        self.replay_buffer
+            .update_priorities(&experiences.indices, &td_errors_vec);
+
+        self.number_of_trainings += 1;
     }
 }

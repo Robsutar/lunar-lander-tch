@@ -25,6 +25,8 @@ pub struct Experience {
     /// A boolean flag that indicates if the episode has terminated.
     pub done: bool,
 }
+
+/// Prioritized experience replay buffer.
 pub struct ExperienceReplayBuffer {
     /// Shape: (capacity, State::SIZE)
     states: Tensor,
@@ -40,12 +42,22 @@ pub struct ExperienceReplayBuffer {
     capacity: usize,
     position: usize,
     size: usize,
+
+    // Prioritized Experience Replay parameters
+    alpha: f32,
+    max_priority: f32,
+    priority_sum: Vec<f32>,
+    priority_min: Vec<f32>,
 }
 
 impl ExperienceReplayBuffer {
-    pub fn new(capacity: usize) -> Self {
+    pub fn new(capacity: usize, alpha: f32) -> Self {
         let state_size_i64 = State::SIZE as i64;
         let capacity_i64 = capacity as i64;
+
+        // Tree size for binary segment tree: 2 * capacity - 1
+        let tree_size = 2 * capacity - 1;
+
         Self {
             states: Tensor::zeros(&[capacity_i64, state_size_i64], (Kind::Float, DEVICE)),
             actions: Tensor::zeros(&[capacity_i64, 1], (Kind::Int64, DEVICE)),
@@ -55,6 +67,10 @@ impl ExperienceReplayBuffer {
             capacity,
             position: 0,
             size: 0,
+            alpha,
+            max_priority: 1.0,
+            priority_sum: vec![0.0; tree_size],
+            priority_min: vec![f32::INFINITY; tree_size],
         }
     }
 

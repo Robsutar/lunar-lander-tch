@@ -30,9 +30,6 @@ pub fn env_post_reset(
             holder.action = Action::Nothing;
             holder.state = state;
 
-            // Update the ε value
-            holder.agent().decay_epsilon();
-
             holder.agent().save("model");
         }
         None => {
@@ -89,6 +86,7 @@ pub fn env_post_step(
     holder.state = next_state;
 
     if done || env.frame() >= MAX_NUM_TIME_STEPS {
+        holder.agent().append_done_env(env);
         Environment::reset(&mut commands);
     }
 }

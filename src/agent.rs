@@ -4,7 +4,7 @@ use rand::{thread_rng, Rng};
 use tch::{Device, Tensor};
 
 use crate::{
-    environment::{Action, State},
+    environment::{Action, Environment, State},
     experience::*,
     model::*,
 };
@@ -26,12 +26,14 @@ const TAU: f64 = 0.001;
 const E_DECAY: f64 = 0.995;
 /// Minimum ε value for the ε-greedy policy.
 const E_MIN: f64 = 0.01;
+/// Initial ε value for the ε-greedy policy.
+const E_START: f64 = 1.0;
 
 /// Used to train the model trainer (DDqnTrainer), with experience replay and ε-greedy policy.
 pub struct Agent {
     replay_buffer: ReplayBuffer,
     trainer: DDqnTrainer,
-    epsilon: f64,
+    number_of_episodes: i32,
 }
 
 impl Agent {
@@ -43,7 +45,7 @@ impl Agent {
         let mut exit = Self {
             replay_buffer: ReplayBuffer::new(MEMORY_SIZE, 0.6),
             trainer: DDqnTrainer::new(ALPHA, GAMMA, TAU),
-            epsilon: 1.0,
+            number_of_episodes: 0,
         };
 
         let model_file = Path::new("./model").join(name.to_owned() + ".ot");
@@ -57,7 +59,7 @@ impl Agent {
             let data: serde_json::Value =
                 serde_json::from_str(&std::fs::read_to_string(agent_file).unwrap()).unwrap();
 
-            exit.epsilon = data["epsilon"].as_f64().unwrap();
+            exit.number_of_episodes = data["number_of_episodes"].as_f64().unwrap() as i32;
         }
 
         exit
@@ -79,8 +81,10 @@ impl Agent {
         let mut json = serde_json::Value::Object(serde_json::Map::new());
         let json_map = json.as_object_mut().unwrap();
         json_map.insert(
-            "epsilon".to_string(),
-            serde_json::Value::Number(serde_json::Number::from_f64(self.epsilon).unwrap()),
+            "number_of_episodes".to_string(),
+            serde_json::Value::Number(
+                serde_json::Number::from_f64(self.number_of_episodes as f64).unwrap(),
+            ),
         );
         std::fs::write(agent_file, serde_json::to_string_pretty(&json).unwrap()).unwrap();
     }
@@ -92,6 +96,10 @@ impl Agent {
         self.replay_buffer.push(experience);
     }
 
+    pub fn append_done_env(&mut self, _env: &Environment) {
+        self.number_of_episodes += 1;
+    }
+
     /// Decide whether to take a random action or use the online_q_network to find the best action.
     ///
     /// The higher the epsilon of this agent, the greater the chance of a random action being chosen,
@@ -99,7 +107,7 @@ impl Agent {
     pub fn get_action(&self, state: &State) -> Action {
         let mut rng = thread_rng();
 
-        let final_move = if rng.gen_range(0.0..1.0) > self.epsilon {
+        let final_move = if rng.gen_range(0.0..1.0) > self.compute_epsilon() {
             let state = Tensor::from_slice(&state.0);
             let prediction = self.trainer.online_q_forward(&state);
             let target_move = prediction.argmax(0, false).int64_value(&[]);
@@ -118,11 +126,13 @@ impl Agent {
         (time_step + 1) % NUM_STEPS_FOR_UPDATE == 0 && self.replay_buffer.size() > MINI_BATCH_SIZE
     }
 
-    /// Reduces the epsilon of the agent with agent hyperparameters.
-    ///
     /// Epsilon is used to chose between exploration and exploitation, see [`Agent::get_action`].
-    pub fn decay_epsilon(&mut self) {
-        self.epsilon = E_MIN.max(E_DECAY * self.epsilon);
+    ///
+    /// # Returns
+    /// Epsilon based on [`Agent#number_of_episodes`].
+    fn compute_epsilon(&self) -> f64 {
+        let epsilon_n = E_DECAY.powi(self.number_of_episodes) * E_START;
+        epsilon_n.max(E_MIN)
     }
 
     /// Uses `experiences` to adjust the model network parameters, computing loss them use backwards

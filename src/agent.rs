@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use rand::{thread_rng, Rng};
-use tch::Tensor;
+use tch::{Device, Tensor};
 
 use crate::{
     environment::{Action, State},
@@ -41,7 +41,7 @@ impl Agent {
     /// Loads the agent properties, like the epsilon, if the file "model/`name`.json" exists.
     pub fn load_if_exists(name: &str) -> Self {
         let mut exit = Self {
-            memory_buffer: ExperienceReplayBuffer::new(MEMORY_SIZE),
+            memory_buffer: ExperienceReplayBuffer::new(MEMORY_SIZE, 0.6),
             trainer: DDqnTrainer::new(ALPHA, GAMMA, TAU),
             epsilon: 1.0,
         };
@@ -92,14 +92,6 @@ impl Agent {
         self.memory_buffer.push(experience);
     }
 
-    /// Samples experiences from the memory buffer with [`MINI_BATCH_SIZE`].
-    ///
-    /// # Panics
-    /// If the buffer has less elements than [`MINI_BATCH_SIZE`].
-    pub fn get_experiences(&self) -> Experiences {
-        self.memory_buffer.sample(MINI_BATCH_SIZE)
-    }
-
     /// Decide whether to take a random action or use the online_q_network to find the best action.
     ///
     /// The higher the epsilon of this agent, the greater the chance of a random action being chosen,
@@ -137,10 +129,21 @@ impl Agent {
     /// propagation. Then, the target_q_network is updated with soft updates.
     pub fn learn(&mut self) {
         // Sample random mini-batch of experience tuples (S,A,R,S') from D
-        let experiences = self.get_experiences();
+        let experiences = self.memory_buffer.sample(MINI_BATCH_SIZE, 0.4);
+
+        // Calculate the loss and TD errors
+        let (loss, td_errors) = self.trainer.compute_loss(&experiences);
 
         // Set the y targets, perform a gradient descent step,
         // and update the network weights.
-        self.trainer.agent_learn(&experiences);
+        self.trainer.agent_learn(loss);
+
+        // Update priorities in the replay buffer
+        let td_errors_abs = td_errors.detach().abs().squeeze().to(Device::Cpu);
+        let td_errors_vec = Vec::<f32>::try_from(&td_errors_abs).unwrap();
+
+        // Update priorities in the buffer
+        self.memory_buffer
+            .update_priorities(&experiences.indices, &td_errors_vec);
     }
 }

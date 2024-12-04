@@ -78,29 +78,32 @@ impl ExperienceReplayBuffer {
         self.size
     }
 
-    /// Appends an experience to the buffer
+    /// Appends an experience to the buffer with maximum priority.
     ///
-    /// If the buffer is full, replace other experience by the new
-    /// experience (rotational position).
+    /// If the buffer is full, replace an old experience (cyclically).
     pub fn push(&mut self, experience: &Experience) {
-        let idx = (self.position % self.capacity) as i64;
+        let idx = self.position;
 
         // Store each component in its respective tensor
         self.states
-            .get(idx)
+            .get(idx as i64)
             .copy_(&Tensor::from_slice(&experience.state.0).to(DEVICE));
         self.actions
-            .get(idx)
+            .get(idx as i64)
             .copy_(&Tensor::from(experience.action.to_index() as i64).to(DEVICE));
         self.rewards
-            .get(idx)
+            .get(idx as i64)
             .copy_(&Tensor::from(experience.reward).to(DEVICE));
         self.next_states
-            .get(idx)
+            .get(idx as i64)
             .copy_(&Tensor::from_slice(&experience.next_state.0).to(DEVICE));
         self.done_values
-            .get(idx)
+            .get(idx as i64)
             .copy_(&Tensor::from(if experience.done { 1.0 } else { 0.0 }).to(DEVICE));
+
+        // Set priority for the new experience
+        let priority_alpha = self.max_priority.powf(self.alpha);
+        self.set_priority(idx, priority_alpha);
 
         self.position = (self.position + 1) % self.capacity;
         if self.size < self.capacity {
@@ -108,11 +111,70 @@ impl ExperienceReplayBuffer {
         }
     }
 
-    /// Samples experiences from this buffer with a desired size.
-    ///
-    /// # Panics
-    /// If the buffer has less elements than `batch_size`
-    pub fn sample(&self, batch_size: usize) -> Experiences {
+    /// Updates the priority for a given index.
+    fn set_priority(&mut self, idx: usize, priority: f32) {
+        self.set_priority_min(idx, priority);
+        self.set_priority_sum(idx, priority);
+    }
+
+    /// Updates the priority in the sum tree.
+    fn set_priority_sum(&mut self, idx: usize, priority: f32) {
+        let mut idx = idx + self.capacity - 1;
+        self.priority_sum[idx] = priority;
+
+        while idx > 0 {
+            idx = (idx - 1) / 2;
+            let left = 2 * idx + 1;
+            let right = 2 * idx + 2;
+
+            self.priority_sum[idx] = self.priority_sum[left] + self.priority_sum[right];
+        }
+    }
+
+    /// Updates the priority in the min tree.
+    fn set_priority_min(&mut self, idx: usize, priority: f32) {
+        let mut idx = idx + self.capacity - 1;
+        self.priority_min[idx] = priority;
+
+        while idx > 0 {
+            idx = (idx - 1) / 2;
+            let left = 2 * idx + 1;
+            let right = 2 * idx + 2;
+
+            self.priority_min[idx] = self.priority_min[left].min(self.priority_min[right]);
+        }
+    }
+
+    /// Returns the total sum of priorities.
+    fn sum(&self) -> f32 {
+        self.priority_sum[0]
+    }
+
+    /// Returns the minimum priority.
+    fn min(&self) -> f32 {
+        self.priority_min[0]
+    }
+
+    /// Finds the index corresponding to a given cumulative priority.
+    fn find_prefix_sum_idx(&self, mut prefix_sum: f32) -> usize {
+        let mut idx = 0;
+
+        while idx < self.capacity - 1 {
+            let left = 2 * idx + 1;
+            let right = left + 1;
+
+            if self.priority_sum[left] > prefix_sum {
+                idx = left;
+            } else {
+                prefix_sum -= self.priority_sum[left];
+                idx = right;
+            }
+        }
+
+        // Return the leaf index
+        idx - (self.capacity - 1)
+    }
+
         if self.size < batch_size {
             panic!(
                 "Not enough experiences in the buffer to sample a batch with size {batch_size}."

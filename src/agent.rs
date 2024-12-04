@@ -29,7 +29,7 @@ const E_MIN: f64 = 0.01;
 
 /// Used to train the model trainer (DDqnTrainer), with experience replay and ε-greedy policy.
 pub struct Agent {
-    memory_buffer: ReplayBuffer,
+    replay_buffer: ReplayBuffer,
     trainer: DDqnTrainer,
     epsilon: f64,
 }
@@ -41,7 +41,7 @@ impl Agent {
     /// Loads the agent properties, like the epsilon, if the file "model/`name`.json" exists.
     pub fn load_if_exists(name: &str) -> Self {
         let mut exit = Self {
-            memory_buffer: ReplayBuffer::new(MEMORY_SIZE, 0.6),
+            replay_buffer: ReplayBuffer::new(MEMORY_SIZE, 0.6),
             trainer: DDqnTrainer::new(ALPHA, GAMMA, TAU),
             epsilon: 1.0,
         };
@@ -89,7 +89,7 @@ impl Agent {
     ///
     /// See [`ExperienceReplayBuffer::push`].
     pub fn append_experience(&mut self, experience: &Experience) {
-        self.memory_buffer.push(experience);
+        self.replay_buffer.push(experience);
     }
 
     /// Decide whether to take a random action or use the online_q_network to find the best action.
@@ -115,7 +115,7 @@ impl Agent {
     /// Returns if good conditions to use [`Agent::learn`] with the values of [`Agent::get_experiences`]
     /// are available.
     pub fn check_update_conditions(&self, time_step: usize) -> bool {
-        (time_step + 1) % NUM_STEPS_FOR_UPDATE == 0 && self.memory_buffer.size() > MINI_BATCH_SIZE
+        (time_step + 1) % NUM_STEPS_FOR_UPDATE == 0 && self.replay_buffer.size() > MINI_BATCH_SIZE
     }
 
     /// Reduces the epsilon of the agent with agent hyperparameters.
@@ -129,7 +129,7 @@ impl Agent {
     /// propagation. Then, the target_q_network is updated with soft updates.
     pub fn learn(&mut self) {
         // Sample random mini-batch of experience tuples (S,A,R,S') from D
-        let experiences = self.memory_buffer.sample(MINI_BATCH_SIZE, 0.4);
+        let experiences = self.replay_buffer.sample(MINI_BATCH_SIZE, 0.4);
 
         // Calculate the loss and TD errors
         let (loss, td_errors) = self.trainer.compute_loss(&experiences);
@@ -143,7 +143,7 @@ impl Agent {
         let td_errors_vec = Vec::<f32>::try_from(&td_errors_abs).unwrap();
 
         // Update priorities in the buffer
-        self.memory_buffer
+        self.replay_buffer
             .update_priorities(&experiences.indices, &td_errors_vec);
     }
 }

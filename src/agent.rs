@@ -34,6 +34,7 @@ pub struct Agent {
     replay_buffer: ReplayBuffer,
     trainer: DDqnTrainer,
     number_of_episodes: i32,
+    number_of_trainings: i32,
 }
 
 impl Agent {
@@ -46,6 +47,7 @@ impl Agent {
             replay_buffer: ReplayBuffer::new(MEMORY_SIZE, 0.6),
             trainer: DDqnTrainer::new(ALPHA, GAMMA, TAU),
             number_of_episodes: 0,
+            number_of_trainings: 0,
         };
 
         let model_file = Path::new("./model").join(name.to_owned() + ".ot");
@@ -60,6 +62,7 @@ impl Agent {
                 serde_json::from_str(&std::fs::read_to_string(agent_file).unwrap()).unwrap();
 
             exit.number_of_episodes = data["number_of_episodes"].as_f64().unwrap() as i32;
+            exit.number_of_trainings = data["number_of_trainings"].as_f64().unwrap() as i32;
         }
 
         exit
@@ -84,6 +87,12 @@ impl Agent {
             "number_of_episodes".to_string(),
             serde_json::Value::Number(
                 serde_json::Number::from_f64(self.number_of_episodes as f64).unwrap(),
+            ),
+        );
+        json_map.insert(
+            "number_of_trainings".to_string(),
+            serde_json::Value::Number(
+                serde_json::Number::from_f64(self.number_of_trainings as f64).unwrap(),
             ),
         );
         std::fs::write(agent_file, serde_json::to_string_pretty(&json).unwrap()).unwrap();
@@ -155,5 +164,7 @@ impl Agent {
         // Update priorities in the buffer
         self.replay_buffer
             .update_priorities(&experiences.indices, &td_errors_vec);
+
+        self.number_of_trainings += 1;
     }
 }

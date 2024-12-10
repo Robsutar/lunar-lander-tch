@@ -19,7 +19,60 @@ pub struct NoisyLinear {
     eps_in: Tensor,
     eps_out: Tensor,
 }
+impl NoisyLinear {
+    pub fn new(vs: nn::Path, in_features: i64, out_features: i64, init_std: f64) -> Self {
+        let mu_weight = vs.var(
+            "mu_weight",
+            &[out_features, in_features],
+            nn::Init::Uniform {
+                lo: -1.0 / (in_features as f64).sqrt(),
+                up: 1.0 / (in_features as f64).sqrt(),
+            },
+        );
+        let mu_bias = vs.var("mu_bias", &[out_features], nn::Init::Const(0.0));
 
+        // Initialize sigma parameters to a small value
+        let sigma_weight = vs.var(
+            "sigma_weight",
+            &[out_features, in_features],
+            nn::Init::Const(init_std as f64),
+        );
+        let sigma_bias = vs.var(
+            "sigma_bias",
+            &[out_features],
+            nn::Init::Const(init_std as f64),
+        );
+
+        let eps_in = Tensor::zeros(&[in_features], (Kind::Float, vs.device()));
+        let eps_out = Tensor::zeros(&[out_features], (Kind::Float, vs.device()));
+
+        let mut layer = NoisyLinear {
+            mu_weight,
+            mu_bias,
+            sigma_weight,
+            sigma_bias,
+            in_features,
+            out_features,
+            eps_in,
+            eps_out,
+        };
+        layer.reset_noise();
+        layer
+    }
+
+    /// Sample noise from a factorized Gaussian distribution
+    fn factorized_noise(dim: i64, device: tch::Device) -> Tensor {
+        let x = Tensor::randn(&[dim], (Kind::Float, device));
+        x.sign() * x.abs().sqrt()
+    }
+
+    pub fn reset_noise(&mut self) {
+        tch::no_grad(|| {
+            self.eps_in = Self::factorized_noise(self.in_features, self.mu_weight.device());
+            self.eps_out = Self::factorized_noise(self.out_features, self.mu_weight.device());
+        });
+    }
+}
 impl Module for NoisyLinear {
     fn forward(&self, xs: &Tensor) -> Tensor {
         let eps_w = self.eps_out.unsqueeze(1).mm(&self.eps_in.unsqueeze(0));

@@ -130,6 +130,17 @@ impl DeepQNet {
             advantage_fc2: NoisyLinear::new(&vs.root() / "advantage_fc2", 128, output_size, 0.5),
         }
     }
+
+    pub fn reset_noises(&mut self) {
+        self.shared_fc1.reset_noise();
+        self.shared_fc2.reset_noise();
+
+        self.value_fc1.reset_noise();
+        self.value_fc2.reset_noise();
+
+        self.advantage_fc1.reset_noise();
+        self.advantage_fc2.reset_noise();
+    }
 }
 impl Module for DeepQNet {
     /// # Returns
@@ -222,6 +233,11 @@ impl DDqnTrainer {
     /// Saves the online_q_network var store in path.
     pub fn save_online_q_network<T: AsRef<std::path::Path>>(&self, path: T) {
         self.online_q_vs.save(path).unwrap();
+    }
+
+    pub fn reset_noises(&mut self) {
+        self.online_q_network.reset_noises();
+        self.target_q_network.reset_noises();
     }
 
     /// Uses online_q_network to predict values, xs must have [`State::SIZE`] values in a single dimension.

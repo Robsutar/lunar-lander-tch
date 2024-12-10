@@ -1,4 +1,4 @@
-use tch::nn::{self, Adam, Module, Optimizer, OptimizerConfig, Sequential, VarStore};
+use tch::nn::{self, Adam, Module, Optimizer, OptimizerConfig, VarStore};
 use tch::{Kind, Tensor};
 
 use crate::{
@@ -99,12 +99,20 @@ impl Module for NoisyLinear {
 /// even if the actions available have similar advantages.
 #[derive(Debug)]
 pub struct DeepQNet {
-    /// Shared layers for extracting features from the input state.
-    shared_layer: Sequential,
-    /// Stream responsible for estimating the value of the state (V(s)).
-    value_stream: Sequential,
-    /// Stream responsible for estimating the advantage of actions (A(s, a)).
-    advantage_stream: Sequential,
+    /// Shared layer 1 for extracting features from the input state.
+    shared_fc1: NoisyLinear,
+    /// Shared layer 2 for extracting features from the input state.
+    shared_fc2: NoisyLinear,
+
+    /// Layer 1 of the stream responsible for estimating the value of the state (V(s)).
+    value_fc1: NoisyLinear,
+    /// Layer 2 of the stream responsible for estimating the value of the state (V(s)).
+    value_fc2: NoisyLinear,
+
+    /// Layer 1 of the stream responsible for estimating the advantage of actions (A(s, a)).
+    advantage_fc1: NoisyLinear,
+    /// Layer 2 of the stream responsible for estimating the advantage of actions (A(s, a)).
+    advantage_fc2: NoisyLinear,
 }
 impl DeepQNet {
     pub fn new(vs: &VarStore) -> Self {
@@ -112,51 +120,14 @@ impl DeepQNet {
         let output_size = Action::SIZE as i64;
 
         Self {
-            shared_layer: nn::seq()
-                .add(nn::linear(
-                    &vs.root() / "shared_fc1",
-                    input_size,
-                    128,
-                    Default::default(),
-                ))
-                .add_fn(|xs| xs.relu())
-                .add(nn::linear(
-                    &vs.root() / "shared_fc2",
-                    128,
-                    128,
-                    Default::default(),
-                ))
-                .add_fn(|xs| xs.relu()),
+            shared_fc1: NoisyLinear::new(&vs.root() / "shared_fc1", input_size, 128, 0.5),
+            shared_fc2: NoisyLinear::new(&vs.root() / "shared_fc2", 128, 128, 0.5),
 
-            value_stream: nn::seq()
-                .add(nn::linear(
-                    &vs.root() / "value_fc1",
-                    128,
-                    128,
-                    Default::default(),
-                ))
-                .add_fn(|xs| xs.relu())
-                .add(nn::linear(
-                    &vs.root() / "value_fc2",
-                    128,
-                    1,
-                    Default::default(),
-                )),
+            value_fc1: NoisyLinear::new(&vs.root() / "value_fc1", 128, 128, 0.5),
+            value_fc2: NoisyLinear::new(&vs.root() / "value_fc2", 128, 1, 0.5),
 
-            advantage_stream: nn::seq()
-                .add(nn::linear(
-                    &vs.root() / "advantage_fc1",
-                    128,
-                    128,
-                    Default::default(),
-                ))
-                .add_fn(|xs| xs.relu())
-                .add(nn::linear(
-                    &vs.root() / "advantage_fc2",
-                    128,
-                    output_size,
-                    Default::default(),
-                )),
+            advantage_fc1: NoisyLinear::new(&vs.root() / "advantage_fc1", 128, 128, 0.5),
+            advantage_fc2: NoisyLinear::new(&vs.root() / "advantage_fc2", 128, output_size, 0.5),
         }
     }
 }
@@ -165,13 +136,16 @@ impl Module for DeepQNet {
     /// A tensor representing the Q-values for each action in the input state(s).
     fn forward(&self, xs: &Tensor) -> Tensor {
         // Shared layers: Extract state features.
-        let x = self.shared_layer.forward(xs);
+        let x = self.shared_fc1.forward(xs).relu();
+        let x = self.shared_fc2.forward(&x).relu();
 
         // Value stream: Estimate the state value V(s).
-        let value = self.value_stream.forward(&x);
+        let value = self.value_fc1.forward(&x).relu();
+        let value = self.value_fc2.forward(&value);
 
         // Advantage stream: Estimate the advantage of each action A(s, a).
-        let advantage = self.advantage_stream.forward(&x);
+        let advantage = self.advantage_fc1.forward(&x).relu();
+        let advantage = self.advantage_fc2.forward(&advantage);
 
         // Normalize the advantage by subtracting its mean across actions.
         let advantage_mean = if xs.size().len() == 1 {

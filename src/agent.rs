@@ -132,8 +132,8 @@ impl Agent {
         let mut rng = thread_rng();
 
         let final_move = if rng.gen_range(0.0..1.0) > self.compute_epsilon() {
-            let state = Tensor::from_slice(&state.0);
-            let prediction = self.trainer.online_q_forward(&state);
+            let state = Tensor::from_slice(&state.0).unsqueeze(0);
+            let prediction = self.trainer.online_q_forward(&state).squeeze_dim(0);
             let target_move = prediction.argmax(0, false).int64_value(&[]);
             Action::from_index(target_move as u8)
         } else {

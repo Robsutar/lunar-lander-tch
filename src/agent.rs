@@ -23,11 +23,11 @@ const MINI_BATCH_SIZE: usize = 64;
 /// Soft update parameter.
 const TAU: f64 = 0.001;
 /// ε-decay rate for the ε-greedy policy.
-const E_DECAY: f64 = 0.995;
+const E_DECAY: f64 = 0.9;
 /// Minimum ε value for the ε-greedy policy.
 const E_MIN: f64 = 0.01;
 /// Initial ε value for the ε-greedy policy.
-const E_START: f64 = 1.0;
+const E_START: f64 = 0.6;
 
 /// Target number of total episodes, used to calculate replay buffer beta.
 const EPISODES_MAX: i32 = 400;

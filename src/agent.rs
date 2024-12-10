@@ -128,7 +128,9 @@ impl Agent {
     ///
     /// The higher the epsilon of this agent, the greater the chance of a random action being chosen,
     /// this is also called as exploration/exploitation policy.
-    pub fn get_action(&self, state: &State) -> Action {
+    pub fn get_action(&mut self, state: &State) -> Action {
+        self.trainer.reset_noises();
+
         let mut rng = thread_rng();
 
         let final_move = if rng.gen_range(0.0..1.0) > self.compute_epsilon() {

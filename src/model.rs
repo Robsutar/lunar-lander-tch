@@ -20,6 +20,18 @@ pub struct NoisyLinear {
     eps_out: Tensor,
 }
 
+impl Module for NoisyLinear {
+    fn forward(&self, xs: &Tensor) -> Tensor {
+        let eps_w = self.eps_out.unsqueeze(1).mm(&self.eps_in.unsqueeze(0));
+        let eps_b = &self.eps_out;
+
+        let w = &self.mu_weight + &self.sigma_weight * &eps_w;
+        let b = &self.mu_bias + &self.sigma_bias * eps_b;
+
+        xs.mm(&w.transpose(0, 1)) + b
+    }
+}
+
 /// A neural network for Dueling Deep Q-Network (Dueling DQN).
 ///
 /// This architecture splits the Q-value estimation into two streams:

@@ -6,6 +6,20 @@ use crate::{
     experience::*,
 };
 
+#[derive(Debug)]
+pub struct NoisyLinear {
+    mu_weight: Tensor,
+    mu_bias: Tensor,
+    sigma_weight: Tensor,
+    sigma_bias: Tensor,
+    in_features: i64,
+    out_features: i64,
+
+    // Factorized noise vectors
+    eps_in: Tensor,
+    eps_out: Tensor,
+}
+
 /// A neural network for Dueling Deep Q-Network (Dueling DQN).
 ///
 /// This architecture splits the Q-value estimation into two streams:

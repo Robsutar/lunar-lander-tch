@@ -8,56 +8,92 @@ use crate::{
 
 #[derive(Debug)]
 pub struct NoisyLinear {
-    mu_weight: Tensor,
-    mu_bias: Tensor,
-    sigma_weight: Tensor,
-    sigma_bias: Tensor,
     in_features: i64,
     out_features: i64,
+    init_std: f64,
 
-    // Factorized noise vectors
-    eps_in: Tensor,
-    eps_out: Tensor,
+    weight_mu: Tensor,
+    weight_sigma: Tensor,
+    weight_epsilon: Tensor,
+
+    bias_mu: Tensor,
+    bias_sigma: Tensor,
+    bias_epsilon: Tensor,
 }
 impl NoisyLinear {
     pub fn new(vs: nn::Path, in_features: i64, out_features: i64, init_std: f64) -> Self {
-        let mu_weight = vs.var(
-            "mu_weight",
+        let weight_mu = vs.var(
+            "weight_mu",
             &[out_features, in_features],
-            nn::Init::Uniform {
-                lo: -1.0 / (in_features as f64).sqrt(),
-                up: 1.0 / (in_features as f64).sqrt(),
-            },
+            nn::Init::Const(0.0),
         );
-        let mu_bias = vs.var("mu_bias", &[out_features], nn::Init::Const(0.0));
+        let weight_sigma = vs.var(
+            "weight_sigma",
+            &[out_features, in_features],
+            nn::Init::Const(0.0),
+        );
+        let weight_epsilon = vs
+            .var(
+                "weight_epsilon",
+                &[out_features, in_features],
+                nn::Init::Const(0.0),
+            )
+            .set_requires_grad(false);
 
-        // Initialize sigma parameters to a small value
-        let sigma_weight = vs.var(
-            "sigma_weight",
-            &[out_features, in_features],
-            nn::Init::Const(init_std as f64),
-        );
-        let sigma_bias = vs.var(
-            "sigma_bias",
+        let bias_mu = vs.var("bias_mu", &[out_features], nn::Init::Const(0.0));
+        let bias_sigma = vs.var(
+            "bias_sigma",
             &[out_features],
             nn::Init::Const(init_std as f64),
         );
-
-        let eps_in = Tensor::zeros(&[in_features], (Kind::Float, vs.device()));
-        let eps_out = Tensor::zeros(&[out_features], (Kind::Float, vs.device()));
+        let bias_epsilon = vs
+            .var("bias_epsilon", &[out_features], nn::Init::Const(0.0))
+            .set_requires_grad(false);
 
         let mut layer = NoisyLinear {
-            mu_weight,
-            mu_bias,
-            sigma_weight,
-            sigma_bias,
             in_features,
             out_features,
-            eps_in,
-            eps_out,
+            init_std,
+
+            weight_mu,
+            weight_sigma,
+            weight_epsilon,
+
+            bias_mu,
+            bias_sigma,
+            bias_epsilon,
         };
+
+        layer.reset_parameters();
         layer.reset_noise();
+
         layer
+    }
+
+    fn reset_parameters(&mut self) {
+        let mu_range = 1.0 / (self.in_features as f64).sqrt();
+
+        let _ = self.weight_mu.data().uniform_(-mu_range, mu_range);
+        let _ = self
+            .weight_sigma
+            .data()
+            .fill_(self.init_std / (self.in_features as f64).sqrt());
+
+        let _ = self.bias_mu.data().uniform_(-mu_range, mu_range);
+        let _ = self
+            .bias_sigma
+            .data()
+            .fill_(self.init_std / (self.out_features as f64).sqrt());
+    }
+
+    pub fn reset_noise(&mut self) {
+        tch::no_grad(|| {
+            let epsilon_in = Self::factorized_noise(self.in_features, self.weight_mu.device());
+            let epsilon_out = Self::factorized_noise(self.out_features, self.weight_mu.device());
+
+            self.weight_epsilon.copy_(&epsilon_out.outer(&epsilon_in));
+            self.bias_epsilon.copy_(&epsilon_out);
+        });
     }
 
     /// Sample noise from a factorized Gaussian distribution
@@ -65,23 +101,13 @@ impl NoisyLinear {
         let x = Tensor::randn(&[dim], (Kind::Float, device));
         x.sign() * x.abs().sqrt()
     }
-
-    pub fn reset_noise(&mut self) {
-        tch::no_grad(|| {
-            self.eps_in = Self::factorized_noise(self.in_features, self.mu_weight.device());
-            self.eps_out = Self::factorized_noise(self.out_features, self.mu_weight.device());
-        });
-    }
 }
 impl Module for NoisyLinear {
     fn forward(&self, xs: &Tensor) -> Tensor {
-        let eps_w = self.eps_out.unsqueeze(1).mm(&self.eps_in.unsqueeze(0));
-        let eps_b = &self.eps_out;
-
-        let w = &self.mu_weight + &self.sigma_weight * &eps_w;
-        let b = &self.mu_bias + &self.sigma_bias * eps_b;
-
-        xs.mm(&w.transpose(0, 1)) + b
+        xs.linear(
+            &(&self.weight_mu + &self.weight_sigma * &self.weight_epsilon),
+            Some(&(&self.bias_mu + &self.bias_sigma * &self.bias_epsilon)),
+        )
     }
 }
 

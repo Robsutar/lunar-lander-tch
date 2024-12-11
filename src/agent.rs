@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use rand::{thread_rng, Rng};
 use tch::{Device, Tensor};
 
 use crate::{
@@ -22,12 +21,6 @@ const NUM_STEPS_FOR_UPDATE: usize = 4;
 const MINI_BATCH_SIZE: usize = 64;
 /// Soft update parameter.
 const TAU: f64 = 0.001;
-/// ε-decay rate for the ε-greedy policy.
-const E_DECAY: f64 = 0.9;
-/// Minimum ε value for the ε-greedy policy.
-const E_MIN: f64 = 0.01;
-/// Initial ε value for the ε-greedy policy.
-const E_START: f64 = 0.6;
 
 /// Target number of total episodes, used to calculate replay buffer beta.
 const EPISODES_MAX: i32 = 400;
@@ -131,34 +124,16 @@ impl Agent {
     pub fn get_action(&mut self, state: &State) -> Action {
         self.trainer.reset_noises();
 
-        let mut rng = thread_rng();
-
-        let final_move = if rng.gen_range(0.0..1.0) > self.compute_epsilon() {
-            let state = Tensor::from_slice(&state.0).unsqueeze(0);
-            let prediction = self.trainer.online_q_forward(&state).squeeze_dim(0);
-            let target_move = prediction.argmax(0, false).int64_value(&[]);
-            Action::from_index(target_move as u8)
-        } else {
-            let target_move = rng.gen_range(0..Action::SIZE);
-            Action::from_index(target_move as u8)
-        };
-
-        return final_move;
+        let state = Tensor::from_slice(&state.0).unsqueeze(0);
+        let prediction = self.trainer.online_q_forward(&state).squeeze_dim(0);
+        let target_move = prediction.argmax(0, false).int64_value(&[]);
+        Action::from_index(target_move as u8)
     }
 
     /// Returns if good conditions to use [`Agent::learn`] with the values of [`Agent::get_experiences`]
     /// are available.
     pub fn check_update_conditions(&self, time_step: usize) -> bool {
         (time_step + 1) % NUM_STEPS_FOR_UPDATE == 0 && self.replay_buffer.size() > MINI_BATCH_SIZE
-    }
-
-    /// Epsilon is used to chose between exploration and exploitation, see [`Agent::get_action`].
-    ///
-    /// # Returns
-    /// Epsilon based on [`Agent#number_of_episodes`].
-    fn compute_epsilon(&self) -> f64 {
-        let epsilon_n = E_DECAY.powi(self.number_of_episodes) * E_START;
-        epsilon_n.max(E_MIN)
     }
 
     /// Replay buffer beta is used to adjust the degree of correction for bias introduced by

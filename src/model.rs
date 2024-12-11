@@ -185,11 +185,7 @@ impl Module for DeepQNet {
         let advantage = self.advantage_fc2.forward(&advantage);
 
         // Normalize the advantage by subtracting its mean across actions.
-        let advantage_mean = if xs.size().len() == 1 {
-            advantage.mean(Kind::Float)
-        } else {
-            advantage.mean_dim(1, true, Kind::Float)
-        };
+        let advantage_mean = advantage.mean_dim(1, true, Kind::Float);
 
         // Combine Value and Advantage to compute Q(s, a).
         value + advantage - advantage_mean

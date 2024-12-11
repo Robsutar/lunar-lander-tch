@@ -166,9 +166,6 @@ impl Agent {
         // and update the network weights.
         self.trainer.agent_learn(loss);
 
-        // Reset noise of all the NoisyLinear
-        self.trainer.reset_noises();
-
         // Update priorities in the replay buffer
         let td_errors_abs = td_errors.detach().abs().squeeze().to(Device::Cpu);
         let td_errors_vec = Vec::<f32>::try_from(&td_errors_abs).unwrap();

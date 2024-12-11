@@ -257,11 +257,6 @@ impl DDqnTrainer {
         self.online_q_vs.save(path).unwrap();
     }
 
-    pub fn reset_noises(&mut self) {
-        self.online_q_network.reset_noises();
-        self.target_q_network.reset_noises();
-    }
-
     /// Uses online_q_network to predict values, xs must have [`State::SIZE`] values in a single dimension.
     pub fn online_q_forward(&self, xs: &Tensor) -> Tensor {
         self.online_q_network.forward(&xs.to(DEVICE))
@@ -311,6 +306,10 @@ impl DDqnTrainer {
         loss.backward();
         // Update the weights of the online_q_network.
         self.online_q_optimizer.step();
+
+        // Reset noise of all the NoisyLinear
+        self.online_q_network.reset_noises();
+        self.target_q_network.reset_noises();
 
         // Update the weights of target_q_network using soft update.
         tch::no_grad(|| {

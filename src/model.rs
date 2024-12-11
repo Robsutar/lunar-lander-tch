@@ -127,18 +127,12 @@ impl Module for NoisyLinear {
 pub struct DeepQNet {
     /// Shared/common layer 1 for extracting features from the input state.
     feature_fc1: Linear,
-    /// Shared/common layer 2 for extracting features from the input state.
-    feature_fc2: Linear,
 
     /// Layer 1 of the stream responsible for estimating the value of the state (V(s)).
     value_fc1: NoisyLinear,
-    /// Layer 2 of the stream responsible for estimating the value of the state (V(s)).
-    value_fc2: NoisyLinear,
 
     /// Layer 1 of the stream responsible for estimating the advantage of actions (A(s, a)).
     advantage_fc1: NoisyLinear,
-    /// Layer 2 of the stream responsible for estimating the advantage of actions (A(s, a)).
-    advantage_fc2: NoisyLinear,
 }
 impl DeepQNet {
     pub fn new(vs: &VarStore) -> Self {
@@ -152,22 +146,17 @@ impl DeepQNet {
                 128,
                 Default::default(),
             ),
-            feature_fc2: nn::linear(&vs.root() / "feature_fc2", 128, 128, Default::default()),
 
-            value_fc1: NoisyLinear::new(&vs.root() / "value_fc1", 128, 128, 0.5),
-            value_fc2: NoisyLinear::new(&vs.root() / "value_fc2", 128, 1, 0.5),
+            value_fc1: NoisyLinear::new(&vs.root() / "value_fc1", 128, 1, 0.5),
 
-            advantage_fc1: NoisyLinear::new(&vs.root() / "advantage_fc1", 128, 128, 0.5),
-            advantage_fc2: NoisyLinear::new(&vs.root() / "advantage_fc2", 128, output_size, 0.5),
-        }
+            advantage_fc1: NoisyLinear::new(&vs.root() / "advantage_fc1", 128, output_size, 0.5),
+        }     
     }
 
     pub fn reset_noises(&mut self) {
         self.value_fc1.reset_noise();
-        self.value_fc2.reset_noise();
 
         self.advantage_fc1.reset_noise();
-        self.advantage_fc2.reset_noise();
     }
 }
 impl Module for DeepQNet {
@@ -176,15 +165,12 @@ impl Module for DeepQNet {
     fn forward(&self, xs: &Tensor) -> Tensor {
         // Shared layers: Extract state features.
         let x = self.feature_fc1.forward(xs).relu();
-        let x = self.feature_fc2.forward(&x).relu();
 
         // Value stream: Estimate the state value V(s).
-        let value = self.value_fc1.forward(&x).relu();
-        let value = self.value_fc2.forward(&value);
+        let value = self.value_fc1.forward(&x);
 
         // Advantage stream: Estimate the advantage of each action A(s, a).
-        let advantage = self.advantage_fc1.forward(&x).relu();
-        let advantage = self.advantage_fc2.forward(&advantage);
+        let advantage = self.advantage_fc1.forward(&x);
 
         // Normalize the advantage by subtracting its mean across actions.
         let advantage_mean = advantage.mean_dim(1, true, Kind::Float);

@@ -121,9 +121,7 @@ impl Agent {
     ///
     /// The higher the epsilon of this agent, the greater the chance of a random action being chosen,
     /// this is also called as exploration/exploitation policy.
-    pub fn get_action(&mut self, state: &State) -> Action {
-        self.trainer.reset_noises();
-
+    pub fn get_action(&self, state: &State) -> Action {
         let state = Tensor::from_slice(&state.0).unsqueeze(0);
         let prediction = self.trainer.online_q_forward(&state).squeeze_dim(0);
         let target_move = prediction.argmax(0, false).int64_value(&[]);
@@ -167,6 +165,9 @@ impl Agent {
         // Set the y targets, perform a gradient descent step,
         // and update the network weights.
         self.trainer.agent_learn(loss);
+
+        // Reset noise of all the NoisyLinear
+        self.trainer.reset_noises();
 
         // Update priorities in the replay buffer
         let td_errors_abs = td_errors.detach().abs().squeeze().to(Device::Cpu);

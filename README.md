@@ -21,5 +21,5 @@ There is an human-controller implementation, for this lunar lander game, to enab
 ```
 
 #### Versions
-- [Version 2.2.0](https://github.com/Robsutar/lunar-lander-tch/tree/v2.2.0): Train model with Double Deep Q-Network, Duelling Deep Q-Network and prioritized experience replay.
+- [Version 2.3.0](https://github.com/Robsutar/lunar-lander-tch/tree/v2.3.0): Train model with Double Deep Q-Network, Duelling Deep Q-Network, prioritized experience replay and Noisy network.
 - [Version 1.1.0](https://github.com/Robsutar/lunar-lander-tch/tree/v1.1.0): Lunar Lander environment creation, DQN network implementation, with replay buffers, soft updates, and more base fundamentals for Deep Q-Networks.

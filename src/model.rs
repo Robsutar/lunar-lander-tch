@@ -1,4 +1,4 @@
-use tch::nn::{self, Adam, Module, Optimizer, OptimizerConfig, VarStore};
+use tch::nn::{self, Adam, Linear, Module, Optimizer, OptimizerConfig, VarStore};
 use tch::{Kind, Tensor};
 
 use crate::{
@@ -125,10 +125,10 @@ impl Module for NoisyLinear {
 /// even if the actions available have similar advantages.
 #[derive(Debug)]
 pub struct DeepQNet {
-    /// Shared layer 1 for extracting features from the input state.
-    shared_fc1: NoisyLinear,
-    /// Shared layer 2 for extracting features from the input state.
-    shared_fc2: NoisyLinear,
+    /// Shared/common layer 1 for extracting features from the input state.
+    feature_fc1: Linear,
+    /// Shared/common layer 2 for extracting features from the input state.
+    feature_fc2: Linear,
 
     /// Layer 1 of the stream responsible for estimating the value of the state (V(s)).
     value_fc1: NoisyLinear,
@@ -146,8 +146,13 @@ impl DeepQNet {
         let output_size = Action::SIZE as i64;
 
         Self {
-            shared_fc1: NoisyLinear::new(&vs.root() / "shared_fc1", input_size, 128, 0.5),
-            shared_fc2: NoisyLinear::new(&vs.root() / "shared_fc2", 128, 128, 0.5),
+            feature_fc1: nn::linear(
+                &vs.root() / "feature_fc1",
+                input_size,
+                128,
+                Default::default(),
+            ),
+            feature_fc2: nn::linear(&vs.root() / "feature_fc2", 128, 128, Default::default()),
 
             value_fc1: NoisyLinear::new(&vs.root() / "value_fc1", 128, 128, 0.5),
             value_fc2: NoisyLinear::new(&vs.root() / "value_fc2", 128, 1, 0.5),
@@ -158,9 +163,6 @@ impl DeepQNet {
     }
 
     pub fn reset_noises(&mut self) {
-        self.shared_fc1.reset_noise();
-        self.shared_fc2.reset_noise();
-
         self.value_fc1.reset_noise();
         self.value_fc2.reset_noise();
 
@@ -173,8 +175,8 @@ impl Module for DeepQNet {
     /// A tensor representing the Q-values for each action in the input state(s).
     fn forward(&self, xs: &Tensor) -> Tensor {
         // Shared layers: Extract state features.
-        let x = self.shared_fc1.forward(xs).relu();
-        let x = self.shared_fc2.forward(&x).relu();
+        let x = self.feature_fc1.forward(xs).relu();
+        let x = self.feature_fc2.forward(&x).relu();
 
         // Value stream: Estimate the state value V(s).
         let value = self.value_fc1.forward(&x).relu();

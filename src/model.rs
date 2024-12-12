@@ -188,13 +188,18 @@ impl DeepQNet {
         // Normalize the advantage by subtracting its mean across actions.
         let advantage_mean = advantage.mean_dim(1, true, Kind::Float);
 
+        let advantage = advantage.view([-1, self.output_size, self.atom_size]);
+        let value = value.view([-1, 1, self.atom_size]);
+
         // Combine Value and Advantage to compute Q(s, a).
         let qsa = value + advantage - advantage_mean;
 
         let q_atoms = qsa.view([-1, self.output_size, self.atom_size]);
 
-        let dist = q_atoms.softmax(-1, None);
-        dist.clamp(0.001, f64::MAX)
+        let mut dist = q_atoms.softmax(-1, Kind::Float);
+        let _ = dist.clamp_min_(0.001);
+
+        dist
     }
 }
 impl Module for DeepQNet {

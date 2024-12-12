@@ -1,10 +1,115 @@
-use tch::nn::{self, Adam, Module, Optimizer, OptimizerConfig, Sequential, VarStore};
+use tch::nn::{self, Adam, Linear, Module, Optimizer, OptimizerConfig, VarStore};
 use tch::{Kind, Tensor};
 
 use crate::{
     environment::{Action, State},
     experience::*,
 };
+
+#[derive(Debug)]
+pub struct NoisyLinear {
+    in_features: i64,
+    out_features: i64,
+    init_std: f64,
+
+    weight_mu: Tensor,
+    weight_sigma: Tensor,
+    weight_epsilon: Tensor,
+
+    bias_mu: Tensor,
+    bias_sigma: Tensor,
+    bias_epsilon: Tensor,
+}
+impl NoisyLinear {
+    pub fn new(vs: nn::Path, in_features: i64, out_features: i64, init_std: f64) -> Self {
+        let weight_mu = vs.var(
+            "weight_mu",
+            &[out_features, in_features],
+            nn::Init::Const(0.0),
+        );
+        let weight_sigma = vs.var(
+            "weight_sigma",
+            &[out_features, in_features],
+            nn::Init::Const(0.0),
+        );
+        let weight_epsilon = vs
+            .var(
+                "weight_epsilon",
+                &[out_features, in_features],
+                nn::Init::Const(0.0),
+            )
+            .set_requires_grad(false);
+
+        let bias_mu = vs.var("bias_mu", &[out_features], nn::Init::Const(0.0));
+        let bias_sigma = vs.var(
+            "bias_sigma",
+            &[out_features],
+            nn::Init::Const(init_std as f64),
+        );
+        let bias_epsilon = vs
+            .var("bias_epsilon", &[out_features], nn::Init::Const(0.0))
+            .set_requires_grad(false);
+
+        let mut layer = NoisyLinear {
+            in_features,
+            out_features,
+            init_std,
+
+            weight_mu,
+            weight_sigma,
+            weight_epsilon,
+
+            bias_mu,
+            bias_sigma,
+            bias_epsilon,
+        };
+
+        layer.reset_parameters();
+        layer.reset_noise();
+
+        layer
+    }
+
+    fn reset_parameters(&mut self) {
+        let mu_range = 1.0 / (self.in_features as f64).sqrt();
+
+        let _ = self.weight_mu.data().uniform_(-mu_range, mu_range);
+        let _ = self
+            .weight_sigma
+            .data()
+            .fill_(self.init_std / (self.in_features as f64).sqrt());
+
+        let _ = self.bias_mu.data().uniform_(-mu_range, mu_range);
+        let _ = self
+            .bias_sigma
+            .data()
+            .fill_(self.init_std / (self.out_features as f64).sqrt());
+    }
+
+    pub fn reset_noise(&mut self) {
+        tch::no_grad(|| {
+            let epsilon_in = Self::factorized_noise(self.in_features, self.weight_mu.device());
+            let epsilon_out = Self::factorized_noise(self.out_features, self.weight_mu.device());
+
+            self.weight_epsilon.copy_(&epsilon_out.outer(&epsilon_in));
+            self.bias_epsilon.copy_(&epsilon_out);
+        });
+    }
+
+    /// Sample noise from a factorized Gaussian distribution
+    fn factorized_noise(dim: i64, device: tch::Device) -> Tensor {
+        let x = Tensor::randn(&[dim], (Kind::Float, device));
+        x.sign() * x.abs().sqrt()
+    }
+}
+impl Module for NoisyLinear {
+    fn forward(&self, xs: &Tensor) -> Tensor {
+        xs.linear(
+            &(&self.weight_mu + &self.weight_sigma * &self.weight_epsilon),
+            Some(&(&self.bias_mu + &self.bias_sigma * &self.bias_epsilon)),
+        )
+    }
+}
 
 /// A neural network for Dueling Deep Q-Network (Dueling DQN).
 ///
@@ -20,12 +125,14 @@ use crate::{
 /// even if the actions available have similar advantages.
 #[derive(Debug)]
 pub struct DeepQNet {
-    /// Shared layers for extracting features from the input state.
-    shared_layer: Sequential,
-    /// Stream responsible for estimating the value of the state (V(s)).
-    value_stream: Sequential,
-    /// Stream responsible for estimating the advantage of actions (A(s, a)).
-    advantage_stream: Sequential,
+    /// Shared/common layer 1 for extracting features from the input state.
+    feature_fc1: Linear,
+
+    /// Layer 1 of the stream responsible for estimating the value of the state (V(s)).
+    value_fc1: NoisyLinear,
+
+    /// Layer 1 of the stream responsible for estimating the advantage of actions (A(s, a)).
+    advantage_fc1: NoisyLinear,
 }
 impl DeepQNet {
     pub fn new(vs: &VarStore) -> Self {
@@ -33,52 +140,23 @@ impl DeepQNet {
         let output_size = Action::SIZE as i64;
 
         Self {
-            shared_layer: nn::seq()
-                .add(nn::linear(
-                    &vs.root() / "shared_fc1",
-                    input_size,
-                    128,
-                    Default::default(),
-                ))
-                .add_fn(|xs| xs.relu())
-                .add(nn::linear(
-                    &vs.root() / "shared_fc2",
-                    128,
-                    128,
-                    Default::default(),
-                ))
-                .add_fn(|xs| xs.relu()),
+            feature_fc1: nn::linear(
+                &vs.root() / "feature_fc1",
+                input_size,
+                128,
+                Default::default(),
+            ),
 
-            value_stream: nn::seq()
-                .add(nn::linear(
-                    &vs.root() / "value_fc1",
-                    128,
-                    128,
-                    Default::default(),
-                ))
-                .add_fn(|xs| xs.relu())
-                .add(nn::linear(
-                    &vs.root() / "value_fc2",
-                    128,
-                    1,
-                    Default::default(),
-                )),
+            value_fc1: NoisyLinear::new(&vs.root() / "value_fc1", 128, 1, 0.5),
 
-            advantage_stream: nn::seq()
-                .add(nn::linear(
-                    &vs.root() / "advantage_fc1",
-                    128,
-                    128,
-                    Default::default(),
-                ))
-                .add_fn(|xs| xs.relu())
-                .add(nn::linear(
-                    &vs.root() / "advantage_fc2",
-                    128,
-                    output_size,
-                    Default::default(),
-                )),
-        }
+            advantage_fc1: NoisyLinear::new(&vs.root() / "advantage_fc1", 128, output_size, 0.5),
+        }     
+    }
+
+    pub fn reset_noises(&mut self) {
+        self.value_fc1.reset_noise();
+
+        self.advantage_fc1.reset_noise();
     }
 }
 impl Module for DeepQNet {
@@ -86,20 +164,16 @@ impl Module for DeepQNet {
     /// A tensor representing the Q-values for each action in the input state(s).
     fn forward(&self, xs: &Tensor) -> Tensor {
         // Shared layers: Extract state features.
-        let x = self.shared_layer.forward(xs);
+        let x = self.feature_fc1.forward(xs).relu();
 
         // Value stream: Estimate the state value V(s).
-        let value = self.value_stream.forward(&x);
+        let value = self.value_fc1.forward(&x);
 
         // Advantage stream: Estimate the advantage of each action A(s, a).
-        let advantage = self.advantage_stream.forward(&x);
+        let advantage = self.advantage_fc1.forward(&x);
 
         // Normalize the advantage by subtracting its mean across actions.
-        let advantage_mean = if xs.size().len() == 1 {
-            advantage.mean(Kind::Float)
-        } else {
-            advantage.mean_dim(1, true, Kind::Float)
-        };
+        let advantage_mean = advantage.mean_dim(1, true, Kind::Float);
 
         // Combine Value and Advantage to compute Q(s, a).
         value + advantage - advantage_mean
@@ -220,6 +294,10 @@ impl DDqnTrainer {
         loss.backward();
         // Update the weights of the online_q_network.
         self.online_q_optimizer.step();
+
+        // Reset noise of all the NoisyLinear
+        self.online_q_network.reset_noises();
+        self.target_q_network.reset_noises();
 
         // Update the weights of target_q_network using soft update.
         tch::no_grad(|| {

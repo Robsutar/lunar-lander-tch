@@ -135,10 +135,7 @@ pub struct DeepQNet {
     advantage_fc1: NoisyLinear,
 }
 impl DeepQNet {
-    pub fn new(vs: &VarStore) -> Self {
-        let input_size = State::SIZE as i64;
-        let output_size = Action::SIZE as i64;
-
+    pub fn new(vs: &VarStore, input_size: i64, output_size: i64) -> Self {
         Self {
             feature_fc1: nn::linear(
                 &vs.root() / "feature_fc1",
@@ -150,7 +147,7 @@ impl DeepQNet {
             value_fc1: NoisyLinear::new(&vs.root() / "value_fc1", 128, 1, 0.5),
 
             advantage_fc1: NoisyLinear::new(&vs.root() / "advantage_fc1", 128, output_size, 0.5),
-        }     
+        }
     }
 
     pub fn reset_noises(&mut self) {
@@ -217,12 +214,16 @@ impl DDqnTrainer {
     pub fn new(q_lr: f64, gamma: f32, tau: f64) -> Self {
         let q_vs = VarStore::new(DEVICE);
         let target_q_vs = VarStore::new(DEVICE);
+
+        let input_size = State::SIZE as i64;
+        let output_size = Action::SIZE as i64;
+
         Self {
-            online_q_network: DeepQNet::new(&q_vs),
+            online_q_network: DeepQNet::new(&q_vs, input_size, output_size),
             online_q_optimizer: Adam::default().build(&q_vs, q_lr).unwrap(),
             online_q_vs: q_vs,
 
-            target_q_network: DeepQNet::new(&target_q_vs),
+            target_q_network: DeepQNet::new(&target_q_vs, input_size, output_size),
             target_q_vs,
 
             gamma,

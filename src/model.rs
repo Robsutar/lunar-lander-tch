@@ -125,6 +125,10 @@ impl Module for NoisyLinear {
 /// even if the actions available have similar advantages.
 #[derive(Debug)]
 pub struct DeepQNet {
+    atom_size: i64,
+    support: Tensor,
+    output_size: i64,
+
     /// Shared/common layer 1 for extracting features from the input state.
     feature_fc1: Linear,
 
@@ -135,8 +139,18 @@ pub struct DeepQNet {
     advantage_fc1: NoisyLinear,
 }
 impl DeepQNet {
-    pub fn new(vs: &VarStore, input_size: i64, output_size: i64) -> Self {
+    pub fn new(
+        vs: &VarStore,
+        input_size: i64,
+        output_size: i64,
+        atom_size: i64,
+        support: Tensor,
+    ) -> Self {
         Self {
+            atom_size,
+            support,
+            output_size,
+
             feature_fc1: nn::linear(
                 &vs.root() / "feature_fc1",
                 input_size,
@@ -144,9 +158,14 @@ impl DeepQNet {
                 Default::default(),
             ),
 
-            value_fc1: NoisyLinear::new(&vs.root() / "value_fc1", 128, 1, 0.5),
+            value_fc1: NoisyLinear::new(&vs.root() / "value_fc1", 128, atom_size, 0.5),
 
-            advantage_fc1: NoisyLinear::new(&vs.root() / "advantage_fc1", 128, output_size, 0.5),
+            advantage_fc1: NoisyLinear::new(
+                &vs.root() / "advantage_fc1",
+                128,
+                output_size * atom_size,
+                0.5,
+            ),
         }
     }
 
@@ -155,11 +174,8 @@ impl DeepQNet {
 
         self.advantage_fc1.reset_noise();
     }
-}
-impl Module for DeepQNet {
-    /// # Returns
-    /// A tensor representing the Q-values for each action in the input state(s).
-    fn forward(&self, xs: &Tensor) -> Tensor {
+
+    pub fn dist(&self, xs: &Tensor) -> Tensor {
         // Shared layers: Extract state features.
         let x = self.feature_fc1.forward(xs).relu();
 
@@ -173,7 +189,21 @@ impl Module for DeepQNet {
         let advantage_mean = advantage.mean_dim(1, true, Kind::Float);
 
         // Combine Value and Advantage to compute Q(s, a).
-        value + advantage - advantage_mean
+        let qsa = value + advantage - advantage_mean;
+
+        let q_atoms = qsa.view([-1, self.output_size, self.atom_size]);
+
+        let dist = q_atoms.softmax(-1, None);
+        dist.clamp(0.001, f64::MAX)
+    }
+}
+impl Module for DeepQNet {
+    /// # Returns
+    /// A tensor representing the Q-values for each action in the input state(s).
+    fn forward(&self, xs: &Tensor) -> Tensor {
+        let dist = self.dist(xs);
+
+        (dist * &self.support).sum_dim_intlist(2, false, Kind::Float)
     }
 }
 
